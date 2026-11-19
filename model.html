@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 机型与对比</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE：机型页 + 对比，已选定 A 窄表（第 2 轮），B 逐项卡、C 换新话术已删，留在提交 d91b309 及之前。
+  ?id=机型 看机型页，?view=compare&cmp=a,b,c 看对比。
+  规则（decisions.md 第 5 节）：参数按分组显示，带配置差异备注和「不适用」；已停售带标记；2–3 台并排对比，在售和已停售可混比。
+  A 窄表：老老实实三列表格，机型名吸顶，「只看不同」开关，相同的行合并成一格。
+-->
+<style>
+  .crumb { font-size: 13px; color: var(--slate); }
+  .crumb a { color: var(--slate); }
+  .checked { font-size: 12px; color: var(--mist); }
+  .na { color: var(--mist); font-style: normal; }
+  .note { display: block; font-size: 12px; color: var(--slate); line-height: 1.4; margin-top: 2px; }
+
+  /* 机型页的共同骨架（三变体在对比入口上不同） */
+  .mp { padding: 16px 16px 28px; }
+  .mp .head { margin: 8px 0 14px; }
+  .mp h1 { font-size: 24px; line-height: 1.25; margin: 4px 0 6px; letter-spacing: -.01em; }
+  .mp .intro { margin: 0 0 8px; color: var(--slate); max-width: 36em; }
+  .mp .switch { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; margin-bottom: 4px; }
+  .mp .switch a { white-space: nowrap; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--slate); background: var(--surface); }
+  .mp .switch a.on { border-color: var(--ink); color: var(--ink); font-weight: 600; }
+  .mp .grp { margin-top: 18px; }
+  .mp .grp h2 { font-size: 14px; margin: 0 0 6px; color: var(--slate); }
+  .mp dl { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); }
+  .mp dl > div { display: grid; grid-template-columns: 104px 1fr; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
+  .mp dl > div:first-child { border-top: 0; }
+  .mp dt { color: var(--slate); font-size: 14px; }
+  .mp dd { margin: 0; font-weight: 500; }
+  .mp .acc { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mp .acc span { padding: 6px 10px; border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-m); font-size: 14px; }
+  .mp .src { margin-top: 18px; font-size: 13px; color: var(--slate); }
+  @container app (min-width: 700px) {
+    .mp { max-width: 860px; margin: 0 auto; padding-top: 28px; }
+    .mp .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  }
+
+  /* 对比页共同 */
+  .cp { padding: 14px 0 28px; }
+  .cp .top { padding: 0 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .cp .top h1 { font-size: 19px; margin: 0; }
+
+  /* ---------- A 窄表 ---------- */
+  .A-tray { position: sticky; bottom: 0; background: var(--ink); color: #fff; padding: 10px 14px; display: flex; align-items: center; gap: 10px; margin: 16px -16px -28px; }
+  .A-tray .n { flex: 1; font-size: 14px; }
+  .A-tray .btn { padding: 7px 12px; }
+  .A-add { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; padding: 7px 12px; border-radius: var(--r-m); border: 1.5px solid var(--ink); background: var(--surface); }
+  .A-add.on { background: var(--ink); color: #fff; }
+  .At { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 13.5px; }
+  .At th, .At td { padding: 8px 6px; vertical-align: top; text-align: left; border-bottom: 1px solid var(--line-soft); }
+  .At thead th { position: sticky; top: 0; background: var(--paper); z-index: 2; border-bottom: 1.5px solid var(--ink); padding-top: 4px; }
+  .At thead .mname { font-weight: 700; font-size: 13px; line-height: 1.3; display: block; }
+  .At thead .yr { font-size: 11px; color: var(--slate); font-weight: 400; }
+  .At thead .x { border: 0; background: none; color: var(--mist); font-size: 12px; padding: 2px 0; }
+  .At .pname { color: var(--slate); font-weight: 500; font-size: 12px; padding-bottom: 0; border-bottom: 0; }
+  .At td.same { color: var(--slate); text-align: center; }
+  .At td.diff { font-weight: 600; }
+  .At tr.g th { background: var(--cobalt-soft); color: var(--cobalt); font-size: 12px; padding: 5px 6px; border: 0; }
+  .At .disc-col { background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(90,102,117,.06) 6px 12px); }
+  .A-opts { display: flex; gap: 10px; align-items: center; padding: 0 16px 8px; font-size: 14px; }
+  .A-opts label { display: inline-flex; gap: 6px; align-items: center; }
+  .A-tablewrap { padding: 0 10px; }
+  /* 手机：参数名单独占一行，值在下一行三列，省出横向空间 */
+  @container app (min-width: 700px) {
+    .cp { max-width: 1000px; margin: 0 auto; padding-top: 28px; }
+    .At { font-size: 14.5px; }
+    .At .pname { display: table-cell; }
+  }
+
+
+
+  .picker { margin: 14px 16px 0; padding: 12px 14px; border: 1px dashed var(--mist); border-radius: var(--r-l); }
+  .picker p { margin: 0 0 8px; font-size: 13px; color: var(--slate); }
+  .picker .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .picker button { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-m); padding: 5px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+const cmpIds = () => P.param('cmp').split(',').filter((id) => UI.model(id)).slice(0, 3);
+const curId = () => UI.model(P.param('id')) ? P.param('id') : 'pro11-m4';
+const isCompare = () => P.param('view') === 'compare';
+const valText = (x) => x.na ? '不适用' : x.v;
+const sameAcross = (ms, item) => new Set(ms.map((m) => valText(m.p[item]) + '|' + (m.p[item].note || ''))).size === 1;
+const accName = (id) => DATA.accessories.find((a) => a.id === id)?.name;
+
+function setCmp(ids) { P.setParams({ cmp: ids.join(','), view: 'compare', id: '' }); }
+function toggleCmp(id) {
+  const ids = P.param('cmp').split(',').filter(Boolean);
+  const i = ids.indexOf(id);
+  if (i >= 0) ids.splice(i, 1);
+  else { if (ids.length >= 3) { P.toast('最多比 3 台，先去掉一台'); return; } ids.push(id); }
+  P.setParams({ cmp: ids.join(',') });
+}
+
+// ---------- 机型页 ----------
+function modelPage(s, compareBit, extraHead = '') {
+  const m = UI.model(curId());
+  const pv = (x) => x.na ? '<em class="na">不适用</em>' : `${P.esc(x.v)}${x.note ? `<span class="note">${P.esc(x.note)}</span>` : ''}`;
+  return `<div class="mp">
+    <div class="crumb"><a href="${P.link('home.html')}">首页</a> › 产品手册 › iPad › ${m.series}</div>
+    <nav class="switch" aria-label="同产品线机型">${DATA.models.map((x) => `<a class="${x.id === m.id ? 'on' : ''}" href="${P.link('model.html', { id: x.id, cmp: P.param('cmp') })}">${x.short}${x.discontinued ? '（已停售）' : ''}</a>`).join('')}</nav>
+    <div class="head">
+      <h1>${m.name} ${UI.disc(m.discontinued)}</h1>
+      <p class="intro">${P.esc(m.intro)}</p>
+      ${extraHead}
+    </div>
+    ${compareBit}
+    <div class="cols">${DATA.groups.map((g) => `<section class="grp"><h2>${g.name}</h2><dl>${g.items.map((it) => `<div><dt>${it}</dt><dd>${pv(m.p[it])}</dd></div>`).join('')}</dl></section>`).join('')}</div>
+    <section class="grp"><h2>兼容的配件</h2><div class="acc">${m.accessories.map((a) => `<span>${accName(a)}</span>`).join('')}</div></section>
+    <p class="src">核对日期 ${m.checked} · <a href="${m.source}" target="_blank" rel="noopener">官方技术规格</a></p>
+  </div>`;
+}
+const picker = (ids, label = '再加一台') => ids.length >= 3 ? '' : `<div class="picker"><p>${label}（最多 3 台，在售和已停售可以混着比）</p><div class="opts">${DATA.models.filter((m) => !ids.includes(m.id)).map((m) => `<button data-act="addCmp" data-id="${m.id}">${m.short}${m.discontinued ? '（已停售）' : ''}</button>`).join('')}</div></div>`;
+const backBar = (title) => `<div class="top"><h1>${title}</h1><a class="btn ghost" href="${P.link('model.html', { id: cmpIds()[0], cmp: P.param('cmp') })}">回机型页</a></div>`;
+
+P.mount({
+  page: '机型与对比',
+  chosen: true,
+  state: { onlyDiff: true },
+  actions: {
+    toggleCmp(el) { toggleCmp(el.dataset.id); return false; },
+    addCmp(el) { setCmp([...cmpIds(), el.dataset.id]); return false; },
+    rmCmp(el) { setCmp(cmpIds().filter((x) => x !== el.dataset.id)); return false; },
+    goCmp() { P.setParams({ view: 'compare', id: '' }); return false; },
+    onlyDiff(el, s) { s.onlyDiff = !s.onlyDiff; },
+  },
+  variants: {
+    // ================= A 窄表 =================
+    A: {
+      name: '窄表',
+      render(s, { device }) {
+        if (!isCompare()) {
+          const m = UI.model(curId());
+          const ids = P.param('cmp').split(',').filter(Boolean);
+          const inCmp = ids.includes(m.id);
+          return modelPage(s, '', `<button class="A-add ${inCmp ? 'on' : ''}" data-act="toggleCmp" data-id="${m.id}">${inCmp ? '✓ 已加入对比' : '＋ 加入对比'}</button>`)
+            .replace(/<\/div>$/, `${ids.length ? `<div class="A-tray"><span class="n">对比栏 ${ids.length}/3：${ids.map((i) => UI.model(i).short).join('、')}</span><button class="btn primary" data-act="goCmp" ${ids.length < 2 ? 'disabled' : ''}>${ids.length < 2 ? '再选 1 台' : '开始对比'}</button></div>` : ''}</div>`);
+        }
+        const ms = cmpIds().map(UI.model);
+        if (ms.length < 2) return `<div class="cp">${backBar('机型对比')}${picker(ms.map((m) => m.id), '至少选 2 台')}</div>`;
+        const phone = device === 'phone';
+        const cols = ms.length;
+        const head = `<thead><tr>${phone ? '' : '<th style="width:120px"></th>'}${ms.map((m) => `<th class="${m.discontinued ? 'disc-col' : ''}"><span class="mname">${m.short}</span><span class="yr">${m.year} ${m.discontinued ? '· 已停售' : ''}</span><br><button class="x" data-act="rmCmp" data-id="${m.id}" aria-label="去掉 ${m.short}">去掉</button></th>`).join('')}</tr></thead>`;
+        let body = '';
+        let hidden = 0;
+        for (const g of DATA.groups) {
+          const rows = g.items.filter((it) => { const same = sameAcross(ms, it); if (same && s.onlyDiff) hidden++; return !(same && s.onlyDiff); });
+          if (!rows.length) continue;
+          body += `<tr class="g"><th colspan="${cols + (phone ? 0 : 1)}">${g.name}</th></tr>`;
+          for (const it of rows) {
+            const same = sameAcross(ms, it);
+            const cells = same
+              ? `<td colspan="${cols}" class="same">${P.esc(valText(ms[0].p[it]))}（${cols} 台相同）</td>`
+              : ms.map((m) => `<td class="diff ${m.discontinued ? 'disc-col' : ''}">${m.p[it].na ? '<em class="na">不适用</em>' : P.esc(m.p[it].v)}${m.p[it].note && !phone ? `<span class="note">${P.esc(m.p[it].note)}</span>` : ''}</td>`).join('');
+            body += phone
+              ? `<tr><td colspan="${cols}" class="pname">${it}</td></tr><tr>${cells}</tr>`
+              : `<tr><th class="pname" style="font-size:13px">${it}</th>${cells}</tr>`;
+          }
+        }
+        return `<div class="cp">
+          ${backBar('机型对比')}
+          <div class="A-opts"><label><input type="checkbox" ${s.onlyDiff ? 'checked' : ''} data-act="onlyDiff"> 只看不同</label>${s.onlyDiff && hidden ? `<span class="checked">已隐藏 ${hidden} 项相同参数</span>` : ''}</div>
+          <div class="A-tablewrap"><table class="At">${head}<tbody>${body}</tbody></table></div>
+          ${picker(ms.map((m) => m.id))}
+        </div>`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,166 @@
+/* PROTOTYPE：一次性原型的公共样式。只放色值变量和几个小部件，布局由各变体自己写。 */
+
+:root {
+  --paper: #eef1f2;     /* 冷灰纸底 */
+  --surface: #ffffff;
+  --ink: #18212c;       /* 蓝黑墨色 */
+  --slate: #5a6675;     /* 次要文字 */
+  --mist: #8a95a3;
+  --line: #d6dce1;
+  --line-soft: #e6eaed;
+  --cobalt: #2343c9;    /* 唯一的操作色 */
+  --cobalt-soft: #e5eafb;
+  --block: #b3261e;     /* 卡点 */
+  --block-soft: #fbe9e7;
+  --pass: #17784a;      /* 通过 / 合格 */
+  --pass-soft: #e3f3ea;
+  --wait: #8a5a00;      /* 待检验、待批 */
+  --wait-soft: #fbf1dc;
+
+  /* 内容类型各有一个形状 + 一个色，形状是主要区分，色是辅助 */
+  --k-model: #2343c9;
+  --k-accessory: #6b3fa0;
+  --k-entry: #17784a;
+  --k-qa: #a2470b;
+
+  --r-s: 4px;
+  --r-m: 8px;
+  --r-l: 14px;
+
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 96px; /* 给底部切换条让位 */
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--cobalt); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; border-radius: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- 舞台：手机框 / 电脑全宽 ---------- */
+#stage { padding: 24px 16px 0; }
+#app {
+  container-type: inline-size;
+  container-name: app;
+  margin: 0 auto;
+  max-width: 1180px;
+  background: var(--paper);
+}
+body[data-device="phone"] #app {
+  width: 390px;
+  max-width: 100%;
+  height: min(820px, calc(100vh - 130px));
+  overflow-y: auto;
+  border-radius: 34px;
+  border: 10px solid #1c232c;
+  box-shadow: 0 30px 60px -30px rgba(24, 33, 44, .45);
+  position: relative;
+}
+/* 真手机上不要画框 */
+@media (max-width: 520px) {
+  #stage { padding: 0; }
+  body[data-device="phone"] #app { width: 100%; height: auto; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+}
+
+/* ---------- 小部件 ---------- */
+.kind {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; line-height: 1; font-weight: 600; white-space: nowrap;
+  padding: 4px 7px 4px 6px; border-radius: var(--r-s);
+  background: var(--surface); border: 1px solid var(--line);
+}
+.kind::before { content: ""; width: 8px; height: 8px; flex: none; }
+.kind.k-model { color: var(--k-model); }
+.kind.k-model::before { background: var(--k-model); border-radius: 1px; }
+.kind.k-accessory { color: var(--k-accessory); }
+.kind.k-accessory::before { background: var(--k-accessory); border-radius: 50%; }
+.kind.k-entry { color: var(--k-entry); }
+.kind.k-entry::before { background: var(--k-entry); clip-path: polygon(0 0, 100% 0, 100% 70%, 70% 100%, 0 100%); }
+.kind.k-qa { color: var(--k-qa); }
+.kind.k-qa::before { background: var(--k-qa); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+
+/* 已停售：像盖上去的章 */
+.disc {
+  display: inline-block; font-size: 11px; font-weight: 700; line-height: 1;
+  color: var(--slate); padding: 3px 5px; border: 1.5px solid currentColor; border-radius: 3px;
+  transform: rotate(-2deg); white-space: nowrap; vertical-align: 2px;
+}
+
+/* 规格签：全局唯一的「重点元素」 */
+.spec-tag {
+  display: inline-flex; flex-direction: column; gap: 1px;
+  padding: 6px 10px 7px; border-radius: var(--r-s);
+  background: var(--ink); color: #fff;
+}
+.spec-tag small { font-size: 11px; color: #b8c2cf; line-height: 1.2; }
+.spec-tag b { font-size: 19px; line-height: 1.15; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+.badge {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 10px; background: var(--block); color: #fff; font-size: 12px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-m);
+  padding: 8px 14px; font-weight: 600; font-size: 14px; color: var(--ink); text-decoration: none;
+}
+.btn:hover { text-decoration: none; border-color: var(--mist); }
+.btn.primary { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+.btn.primary:hover { background: #1a36ad; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--cobalt); padding-inline: 6px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+.searchbox {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1.5px solid var(--ink); border-radius: var(--r-m);
+  padding: 0 6px 0 12px;
+}
+.searchbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; padding: 11px 0; font-size: 16px; }
+.searchbox:focus-within { box-shadow: 0 0 0 3px var(--cobalt-soft); border-color: var(--cobalt); }
+
+/* ---------- 原型提示 ---------- */
+#toast {
+  position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(10px);
+  background: #2b3541; color: #fff; padding: 9px 14px; border-radius: var(--r-m); font-size: 13px;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; z-index: 1001; max-width: calc(100vw - 32px);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- 底部浮动切换条（不属于被评估的设计） ---------- */
+#proto-bar {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 1000;
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 16px);
+  background: #fff200; color: #000; border: 2px solid #000; border-radius: 999px;
+  padding: 4px 6px; font: 600 13px/1 -apple-system, "PingFang SC", sans-serif;
+  box-shadow: 4px 4px 0 #000;
+}
+#proto-bar button, #proto-bar a {
+  border: 0; background: transparent; color: #000; padding: 7px 9px; border-radius: 999px; font: inherit; text-decoration: none;
+}
+#proto-bar button:hover, #proto-bar a:hover { background: rgba(0,0,0,.1); }
+#proto-bar .pb-label { padding: 0 6px; white-space: nowrap; }
+#proto-bar .pb-sep { width: 1px; height: 20px; background: rgba(0,0,0,.3); margin: 0 2px; }
+#proto-bar .on { background: #000 !important; color: #fff200 !important; }
+#proto-state {
+  position: fixed; right: 12px; bottom: 74px; z-index: 1000; width: min(360px, calc(100vw - 24px)); max-height: 50vh; overflow: auto;
+  background: #000; color: #fff200; font: 12px/1.5 ui-monospace, Menlo, monospace; padding: 10px 12px; border-radius: 8px;
+  white-space: pre-wrap; display: none;
+}
+#proto-state.show { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

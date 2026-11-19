@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 权限勾选表</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE：管理后台 · 权限勾选表，已选定 A 三列表（第 2 轮），B 以角色看、C 按工作分组已删，留在提交 d91b309 及之前。
+  规则（decisions.md 第 3 节、ADR-0002）：勾选表只管协导员一列，11 项（默认开 7、默认关 4）；
+  对全体协导员统一、立即生效、只记最后修改人和时间；管理员和员工的能力写死；
+  关掉一项后，没做完的转给管理员，做过的保留。
+  A 三列表：能力 × 管理员 / 协导员 / 员工，只有协导员一列能拨，写死的行单独一段灰掉。
+-->
+<style>
+  .adm-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; margin-bottom: 4px; }
+  .adm-top h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+  .stamp { font-size: 13px; color: var(--slate); }
+  .lead { font-size: 14px; color: var(--slate); margin: 4px 0 18px; max-width: 40em; }
+  .crumb { font-size: 13px; color: var(--slate); margin-bottom: 6px; }
+  .crumb a { color: var(--slate); }
+  .sw { position: relative; width: 44px; height: 26px; flex: none; border-radius: 13px; border: 0; background: var(--mist); padding: 0; transition: background .15s; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .sw[aria-checked="true"] { background: var(--pass); }
+  .sw[aria-checked="true"]::after { transform: translateX(18px); }
+  .def { font-size: 11px; color: var(--mist); white-space: nowrap; }
+  .changed { font-size: 11px; color: var(--wait); font-weight: 700; white-space: nowrap; }
+  .yes { color: var(--pass); font-weight: 600; }
+  .no { color: var(--mist); }
+  .lock { font-size: 12px; color: var(--mist); }
+
+  /* ---------- A 三列表 ---------- */
+  .A { padding: 18px 16px 28px; }
+  .A table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; font-size: 14px; }
+  .A th, .A td { padding: 11px 12px; text-align: left; vertical-align: top; border-top: 1px solid var(--line-soft); }
+  .A thead th { border-top: 0; background: var(--paper); font-size: 13px; position: sticky; top: 0; z-index: 1; }
+  .A thead th.fac { background: var(--cobalt-soft); color: var(--cobalt); }
+  .A td.fac { background: #f6f8fe; }
+  .A .ab { font-weight: 600; }
+  .A .ab small { display: block; font-weight: 400; color: var(--slate); font-size: 12px; margin-top: 2px; }
+  .A .facc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .A .facc .scope { font-size: 12px; color: var(--slate); flex-basis: 100%; }
+  .A tr.sec th { background: var(--paper); color: var(--slate); font-size: 12px; padding: 7px 12px; }
+  .A tr.fixed td { color: var(--slate); }
+  .A tr.fixed .ab { font-weight: 500; }
+  /* 手机：员工列收掉，改成行内小字 */
+  .A .staff-inline { display: none; font-size: 12px; color: var(--slate); margin-top: 4px; }
+  @container app (max-width: 699px) {
+    .A .col-staff { display: none; }
+    .A .staff-inline { display: block; }
+    .A th, .A td { padding: 10px 8px; }
+    .A table { font-size: 13.5px; }
+  }
+  @container app (min-width: 700px) { .A { max-width: 1040px; margin: 0 auto; padding-top: 30px; } }
+
+
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+// ---------- 勾选表：11 项，顺序和编号照 decisions.md 第 3 节 ----------
+const ABILITIES = [
+  { id: 'on1', def: true, name: '分派学习任务', detail: '含修改、取消自己派出的任务', scope: '对象限于自己负责的员工', admin: '对象为任何学习者或全员', area: 'mentor',
+    plain: '给自己带的新员工派学习任务，改或取消自己派的', off: '已派出的 6 个任务改由管理员修改和取消；任务本身和进度都保留' },
+  { id: 'on2', def: true, name: '批准重做申请', scope: '限于自己负责的员工', admin: '任何学习者，包括本人', area: 'mentor',
+    plain: '批准或驳回自己带的新员工的重做申请', off: '眼下 1 条重做待批转给管理员' },
+  { id: 'on3', def: true, name: '检验简答题', scope: '限于自己负责的员工', admin: '本人以外的任何学习者', area: 'mentor',
+    plain: '当面听自己带的新员工讲简答题，并登记结果', off: '眼下 2 道待检验转给管理员；已登记的检验记录保留' },
+  { id: 'on7', def: true, name: '查看学习者汇总表和学习记录', scope: '限于自己负责的员工', admin: '全员，包括其他管理员', area: 'mentor',
+    plain: '看自己带的新员工学到哪了、哪些知识点薄弱', off: '协导员看不到负责的员工的进度；管理员照常能看' },
+  { id: 'on4', def: true, name: '查看待答池，答复或关闭提问', detail: '含查看历史提问、修改自己的答复', scope: '全部提问，本人的除外', admin: '全部提问，本人的除外', area: 'qa',
+    plain: '看全店的提问并答复（不按负责关系分）', off: '待答池里 4 条提问只有管理员能答复' },
+  { id: 'on5', def: true, name: '发布问答', detail: '含修改、撤回自己发布的问答', scope: '只改自己发布的；知识点从已有的里选', admin: '任何问答', area: 'qa',
+    plain: '把好答案整理成问答发布给全员，改或撤回自己发的', off: '已发布的问答保留，之后只有管理员能修改' },
+  { id: 'on6', def: true, name: '查看无结果搜索词清单', detail: '含忽略其中的词', scope: '全部', admin: '全部', area: 'qa',
+    plain: '看大家搜了什么没搜到，找出该补的内容', off: '只有管理员能看这张清单' },
+  { id: 'off1', def: false, name: '维护机型、配件与知识条目', scope: '与管理员相同', admin: '可以', area: 'content',
+    plain: '新建和修改产品手册里的内容', off: '' , on: '打开后能改全部内容，不只自己建的；首页会出现核对日期过期的提醒' },
+  { id: 'off2', def: false, name: '新建、修改练习题', scope: '与管理员相同', admin: '可以', area: 'content',
+    plain: '出题和改题', off: '', on: '打开后能改全部练习题，不只自己出的' },
+  { id: 'off3', def: false, name: '维护同义词组', scope: '与管理员相同', admin: '可以', area: 'content',
+    plain: '让楼面上的口头说法也能搜到（如「笔」=「Apple Pencil」）', off: '', on: '保存即生效，影响全店的搜索结果' },
+  { id: 'off4', def: false, name: '查看知识点报表和练习题报表', scope: '与管理员相同', admin: '可以', area: 'report',
+    plain: '看全店在各知识点上的正确率，找出坏题', off: '', on: '打开后能看全店的数据，不限自己负责的员工' },
+];
+const FIXED = [
+  ['开通、停用账号，重置密码，调整角色', '可以', '不可以', '不可以'],
+  ['指定和调整负责关系', '可以', '不可以', '不可以'],
+  ['调整这张权限勾选表', '可以', '不可以', '不可以'],
+  ['维护参数项清单与知识点', '可以', '不可以', '不可以'],
+  ['作废检验记录', '可以', '不可以，包括自己登记的', '不可以'],
+  ['修改、撤回他人发布的问答', '可以', '不可以', '不可以'],
+  ['做派给自己的学习任务、看自己的学习记录', '可以', '可以', '可以'],
+  ['快速查询、看产品手册、提问', '可以', '可以', '可以'],
+];
+
+function fmtNow() { const d = new Date(); return `今天 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+const stamp = (s) => `<span class="stamp">对全体 3 位协导员统一生效 · 最后修改：${s.by}，${s.at}</span>`;
+const sw = (a, s) => `<button class="sw" role="switch" aria-checked="${!!s.on[a.id]}" aria-label="协导员：${a.name}" data-act="flip" data-id="${a.id}"></button>`;
+const mark = (a, s) => s.on[a.id] !== a.def ? '<span class="changed">已改动</span>' : `<span class="def">默认${a.def ? '开' : '关'}</span>`;
+const head = (s, title = '权限勾选表') => `
+  <div class="crumb"><a href="${P.link('home.html', { role: 'facilitator' })}">首页</a> › 管理后台</div>
+  <div class="adm-top"><h1>${title}</h1>${stamp(s)}</div>`;
+
+P.mount({
+  page: '权限勾选表',
+  chosen: true,
+  state: { on: Object.fromEntries(ABILITIES.map((a) => [a.id, a.def])), by: 'Zee', at: '11 月 2 日 10:14' },
+  actions: {
+    flip(el, s) {
+      const a = ABILITIES.find((x) => x.id === el.dataset.id);
+      s.on[a.id] = !s.on[a.id];
+      s.by = 'Zee（你）'; s.at = fmtNow();
+      P.toast(s.on[a.id] ? `已对全体协导员打开「${a.name}」` : `已对全体协导员关掉「${a.name}」${a.off ? '：' + a.off : ''}`);
+    },
+    reset(el, s) { for (const a of ABILITIES) s.on[a.id] = a.def; s.by = 'Zee（你）'; s.at = fmtNow(); P.toast('已恢复默认'); },
+  },
+  variants: {
+    A: {
+      name: '三列表',
+      render(s) {
+        const row = (a) => `<tr>
+          <td><div class="ab">${a.name}${a.detail ? `<small>${a.detail}</small>` : ''}</div><div class="staff-inline">员工：不可以</div></td>
+          <td>${P.esc(a.admin) === '可以' ? '<span class="yes">可以</span>' : `<span class="yes">可以</span><div class="lock">${P.esc(a.admin)}</div>`}</td>
+          <td class="fac"><div class="facc">${sw(a, s)}${s.on[a.id] ? '<span class="yes">可以</span>' : '<span class="no">不可以</span>'}${mark(a, s)}${s.on[a.id] ? `<span class="scope">${P.esc(a.scope)}</span>` : ''}</div></td>
+          <td class="col-staff"><span class="no">不可以</span></td></tr>`;
+        const val = (v) => v === '可以' ? '<span class="yes">可以</span>' : v === '不可以' ? '<span class="no">不可以</span>' : `<span class="no">${v}</span>`;
+        return `<div class="A">${head(s)}
+          <p class="lead">只有协导员一列能拨。拨了立即对全体协导员生效，没有保存按钮。管理员的能力不能削减，员工的能力固定。</p>
+          <table>
+            <thead><tr><th>能力</th><th style="width:22%">管理员</th><th class="fac" style="width:30%">协导员（可调）</th><th class="col-staff" style="width:12%">员工</th></tr></thead>
+            <tbody>
+              <tr class="sec"><th colspan="4">默认开启，可以关掉</th></tr>${ABILITIES.filter((a) => a.def).map(row).join('')}
+              <tr class="sec"><th colspan="4">默认关闭，可以打开</th></tr>${ABILITIES.filter((a) => !a.def).map(row).join('')}
+              <tr class="sec"><th colspan="4">写死的，不能调</th></tr>
+              ${FIXED.map(([n, a, f, e]) => `<tr class="fixed"><td><div class="ab">${n}</div><div class="staff-inline">员工：${e}</div></td><td>${val(a)}</td><td class="fac">${val(f)} <span class="lock">🔒</span></td><td class="col-staff">${val(e)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <p style="margin-top:14px"><button class="btn" data-act="reset">恢复默认</button></p>
+        </div>`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 任务详情</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE：任务详情，已选定 C 时间线（第 2 轮），A 三道关、B 待办清单已删，留在提交 d91b309 及之前。
+  规则（decisions.md 第 6、7 节）：完成 = 阅读全部确认 + 选择题通过 + 全部简答题合格；卡点可以同时有多个；
+  选择题未通过要先申请重做、批准后才能再作答；简答题当面口头、没有「申请检验」；检验前看不到合格要点。
+  C 时间线：任务按「做过什么、接下来做什么」排成一条线，卡点是线上的节点。
+-->
+<style>
+  .t-head { margin-bottom: 14px; }
+  .t-head h1 { font-size: 22px; line-height: 1.3; margin: 2px 0 6px; letter-spacing: -.01em; }
+  .t-meta { font-size: 13px; color: var(--slate); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .t-meta .overdue { color: var(--block); font-weight: 700; }
+  .t-desc { font-size: 14px; color: var(--slate); margin: 8px 0 0; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.block { background: var(--block-soft); color: var(--block); }
+  .pill.wait { background: var(--wait-soft); color: var(--wait); }
+  .pill.pass { background: var(--pass-soft); color: var(--pass); }
+  .read-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+  .read-row:first-child { border-top: 0; }
+  .read-row .tt { flex: 1; min-width: 0; }
+  .read-row .tt a { color: var(--ink); font-weight: 600; }
+  .read-row .tt .sub { font-size: 12px; color: var(--slate); }
+  .chk { width: 26px; height: 26px; flex: none; border-radius: 7px; border: 2px solid var(--mist); background: var(--surface); display: grid; place-items: center; font-size: 15px; color: #fff; padding: 0; }
+  .chk.on { background: var(--pass); border-color: var(--pass); }
+  .mark-btn { font-size: 13px; padding: 5px 10px; }
+  .attempts { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .attempts td { padding: 6px 0; border-top: 1px solid var(--line-soft); }
+  .attempts td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .sa { padding: 12px 0; border-top: 1px solid var(--line-soft); }
+  .sa:first-child { border-top: 0; }
+  .sa .scene { font-size: 13px; color: var(--slate); margin: 0 0 4px; }
+  .sa .stem { font-weight: 600; margin: 0 0 8px; }
+  .sa .pts { list-style: none; padding: 0; margin: 6px 0 0; font-size: 14px; }
+  .sa .pts li { padding: 3px 0; display: flex; gap: 8px; }
+  .sa .pts .y { color: var(--pass); font-weight: 700; }
+  .sa .pts .n { color: var(--block); font-weight: 700; }
+  .sa .by { font-size: 12px; color: var(--slate); margin-top: 6px; }
+  .hint { font-size: 13px; color: var(--slate); background: var(--paper); border-radius: var(--r-m); padding: 8px 10px; margin-top: 8px; }
+  .redo-form textarea { width: 100%; min-height: 70px; border: 1px solid var(--line); border-radius: var(--r-m); padding: 8px; font: inherit; margin: 8px 0; }
+
+
+
+  /* ---------- C 时间线 ---------- */
+  .C { padding: 16px 16px 28px; }
+  .C .status { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .C .status .big { font-size: 15px; font-weight: 700; }
+  .C .tl { list-style: none; margin: 0; padding: 0; position: relative; }
+  .C .tl::before { content: ""; position: absolute; left: 11px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .C .tl > li { position: relative; padding: 0 0 20px 38px; }
+  .C .tl .node { position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: var(--surface); border: 2px solid var(--mist); color: var(--mist); }
+  .C .tl .node.done { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .C .tl .node.block { background: var(--block); border-color: var(--block); color: #fff; }
+  .C .tl .node.wait { background: var(--wait-soft); border-color: var(--wait); color: var(--wait); }
+  .C .tl .when { font-size: 12px; color: var(--mist); }
+  .C .tl .what { font-weight: 600; }
+  .C .tl .what.block { color: var(--block); }
+  .C .tl .what.wait { color: var(--wait); }
+  .C .tl .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 6px 12px; margin-top: 8px; }
+  .C .tl li.past .what { font-weight: 500; color: var(--slate); }
+  .C .tl .divider { padding-left: 38px; font-size: 12px; color: var(--slate); font-weight: 700; margin: 4px 0 14px; }
+  @container app (min-width: 700px) { .C { max-width: 720px; margin: 0 auto; padding-top: 28px; } }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+// ---------- 任务假数据（今天 2026-11-18，截止 11-17，已逾期 1 天） ----------
+const TASK = {
+  title: '平板换新：新旧 iPad Pro 讲清差异', by: 'Mia', due: '11 月 17 日', est: '25 分钟',
+  desc: '很多顾客拿 2020 年的 iPad Pro 来问要不要换。读完材料，做选择题，再找 Mia 当面讲一遍简答题。',
+};
+const READS = [
+  { id: 'r1', kind: 'model', title: 'iPad Pro 11 英寸（M4）', href: () => P.link('model.html', { id: 'pro11-m4' }) },
+  { id: 'r2', kind: 'model', title: 'iPad Pro 11 英寸（第 2 代）', href: () => P.link('model.html', { id: 'pro11-g2' }) },
+  { id: 'r3', kind: 'entry', title: 'iPad Air 和 iPad Pro 该怎么选', href: () => '#' },
+  { id: 'r4', kind: 'qa', title: 'Apple Pencil 第二代能不能配 iPad 第 10 代？', href: () => '#' },
+];
+const MCQ = { total: 8, attempts: [{ at: '11 月 15 日', score: 5 }] };
+const SAS = [
+  { id: 's1', scene: '顾客是一名插画师，用的是 2020 年的 iPad Pro 11 英寸。', stem: '他想知道换成 iPad Pro 11 英寸（M4）画画体验上会有什么不同，你怎么讲？',
+    checks: [] },
+  { id: 's2', scene: '顾客拿着 Apple Pencil（第二代）来问。', stem: '他的笔能不能直接用在新的 iPad Pro（M4）上？要怎么跟他说？',
+    checks: [{ at: '11 月 16 日 14:20', by: 'Mia', ok: true, need: 2, pts: [['讲清第二代不兼容 M4 款', true], ['推荐 Apple Pencil Pro 并说出一项新功能', true], ['提到 USB-C 款作为便宜的替代', false]], note: '第三点下次可以带上。' }] },
+];
+
+function computed(s) {
+  const readLeft = READS.filter((r) => !s.read[r.id]).length;
+  const last = MCQ.attempts[MCQ.attempts.length - 1];
+  const passed = last && last.score / MCQ.total >= 0.8;
+  const saLeft = SAS.filter((q) => !q.checks.some((c) => c.ok)).length;
+  const blocks = [];
+  if (readLeft) blocks.push({ k: 'read', type: 'block', label: `还有 ${readLeft} 条未读`, act: '去读' });
+  if (!passed) {
+    if (s.redo === 'pending') blocks.push({ k: 'redo', type: 'wait', label: '重做待批', sub: '已申请，等 Mia 批准' });
+    else if (s.redo === 'approved') blocks.push({ k: 'mcq', type: 'block', label: '选择题未通过', sub: '重做已批准，可以作答', act: '重新作答' });
+    else blocks.push({ k: 'mcq', type: 'block', label: '选择题未通过', sub: `上次 ${last.score}/${MCQ.total}，要 ${Math.ceil(MCQ.total * 0.8)} 题才通过`, act: '申请重做' });
+  }
+  if (saLeft) blocks.push({ k: 'sa', type: 'wait', label: `${saLeft} 道简答题待检验`, sub: '准备好了直接找 Mia 当面讲', act: null });
+  return { readLeft, passed, last, saLeft, blocks };
+}
+
+const readList = (s, compact, onlyUnread) => READS.filter((r) => !onlyUnread || !s.read[r.id]).map((r) => `
+  <div class="read-row">
+    <button class="chk ${s.read[r.id] ? 'on' : ''}" data-act="read" data-id="${r.id}" aria-pressed="${!!s.read[r.id]}" aria-label="标记已读：${r.title}">${s.read[r.id] ? '✓' : ''}</button>
+    <div class="tt">${UI.kind(r.kind)} <a href="${r.href()}">${P.esc(r.title)}</a>${compact ? '' : `<div class="sub">${s.read[r.id] ? '已读' : '未读'}</div>`}</div>
+  </div>`).join('');
+const mcqBlock = (s, c) => `
+  <table class="attempts"><tbody>${MCQ.attempts.map((a, i) => `<tr><td>第 ${i + 1} 次作答 · ${a.at}</td><td style="color:${a.score / MCQ.total >= .8 ? 'var(--pass)' : 'var(--block)'}">${a.score}/${MCQ.total}</td></tr>`).join('')}</tbody></table>
+  ${c.passed ? '' : s.redo === 'pending' ? '<div class="hint">重做申请已提交，Mia 批准后这里会出现「重新作答」。<br><button class="btn ghost" style="padding:4px 0" data-act="approve">（原型）模拟 Mia 批准</button></div>'
+    : s.redo === 'approved' ? `<button class="btn primary" style="margin-top:10px" data-act="stub" data-msg="作答页不在本轮原型里">重新作答</button>`
+    : s.redoForm ? `<form class="redo-form" data-submit="redo"><textarea name="why" placeholder="说明（选填），比如：已经重新读过兼容关系"></textarea><div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn" data-act="redoForm">先不申请</button><button class="btn primary">提交申请</button></div></form>`
+    : `<button class="btn primary" style="margin-top:10px" data-act="redoForm">申请重做</button><div class="hint">再次作答要先申请，批准后才能做。上次的对错和解析可以随时回看。</div>`}`;
+const saBlock = () => SAS.map((q) => {
+  const ok = q.checks.find((c) => c.ok);
+  return `<div class="sa">
+    <p class="scene">${P.esc(q.scene)}</p><p class="stem">${P.esc(q.stem)}</p>
+    ${ok ? `<span class="pill pass">合格 · 讲到 ${ok.pts.filter((p) => p[1]).length}/${ok.pts.length} 条，要求 ${ok.need} 条</span>
+      <ul class="pts">${ok.pts.map(([t, y]) => `<li><span class="${y ? 'y' : 'n'}">${y ? '✓' : '✗'}</span>${P.esc(t)}</li>`).join('')}</ul>
+      <div class="by">检验人 ${ok.by} · ${ok.at}${ok.note ? ` · 评语：${P.esc(ok.note)}` : ''}</div>`
+    : `<span class="pill wait">待检验</span><div class="hint">准备好了直接找 Mia 当面讲，不用在系统里申请。检验之后这里会显示每条合格要点讲到没有。</div>`}
+  </div>`;
+}).join('');
+const head = () => `<div class="t-head">
+  <div class="t-meta"><a href="${P.link('home.html')}">‹ 学习任务</a></div>
+  <h1>${TASK.title}</h1>
+  <div class="t-meta"><span class="overdue">已逾期 1 天（${TASK.due}截止）</span><span>分派人 ${TASK.by}</span><span>预计 ${TASK.est}</span></div>
+  <p class="t-desc">${TASK.desc}</p></div>`;
+
+P.mount({
+  page: '任务详情',
+  chosen: true,
+  state: { read: { r1: true, r2: true }, redo: 'none', redoForm: false },
+  actions: {
+    read(el, s) { s.read[el.dataset.id] = !s.read[el.dataset.id]; },
+    redoForm(el, s) { s.redoForm = !s.redoForm; },
+    stub(el) { P.toast(el.dataset.msg); return false; },
+    approve(el, s) { s.redo = 'approved'; P.toast('（模拟）Mia 批准了重做申请'); },
+  },
+  submits: { redo(f, s) { s.redo = 'pending'; s.redoForm = false; P.toast('重做申请已提交'); } },
+  variants: {
+    C: {
+      name: '时间线',
+      render(s) {
+        const c = computed(s);
+        const past = [
+          { when: '11 月 10 日', what: 'Mia 派出这个任务', node: 'done', mark: '' },
+          { when: '11 月 12 日', what: `读完 ${READS.filter((r) => s.read[r.id]).length} 条材料`, node: 'done', mark: '✓' },
+          { when: '11 月 15 日', what: `第 1 次作答选择题：${c.last.score}/${MCQ.total}，未通过`, node: 'block', mark: '✗', cls: 'block' },
+          { when: '11 月 16 日', what: '简答题第 2 题检验合格（Mia）', node: 'done', mark: '✓' },
+          ...(s.redo !== 'none' ? [{ when: '今天', what: '申请重做选择题', node: 'done', mark: '✓' }] : []),
+          { when: '11 月 17 日', what: '截止日期已过，任务照常可以继续', node: 'block', mark: '!', cls: 'block' },
+        ];
+        const next = [];
+        if (c.readLeft) next.push({ what: `读完剩下 ${c.readLeft} 条`, node: 'block', cls: 'block', body: `<div class="card">${readList(s, true, true)}</div>` });
+        if (!c.passed) next.push({ what: s.redo === 'pending' ? '等 Mia 批准重做' : s.redo === 'approved' ? '重做已批准，重新作答选择题' : '申请重做选择题', node: s.redo === 'pending' ? 'wait' : 'block', cls: s.redo === 'pending' ? 'wait' : 'block', body: `<div class="card" style="padding:10px 12px">${mcqBlock(s, c)}</div>` });
+        if (c.saLeft) next.push({ what: `找 Mia 当面讲 ${c.saLeft} 道简答题`, node: 'wait', cls: 'wait', body: `<div class="card">${saBlock().split('<div class="sa">').filter((x) => x.includes('待检验')).map((x) => '<div class="sa">' + x).join('')}</div>` });
+        return `<div class="C">${head()}
+          <div class="status"><span class="big">进行中</span>${c.blocks.map((b) => `<span class="pill ${b.type}">${b.label}</span>`).join('')}</div>
+          <ol class="tl">
+            ${next.map((n, i) => `<li><span class="node ${n.node}">${i + 1}</span><div class="what ${n.cls}">${n.what}</div>${n.body}</li>`).join('')}
+            ${next.length ? '' : '<li><span class="node done">✓</span><div class="what">全部完成</div></li>'}
+            <li class="divider" style="padding-bottom:0">已经做过的</li>
+            ${past.reverse().map((p) => `<li class="past"><span class="node ${p.node}">${p.mark}</span><div class="when">${p.when}</div><div class="what ${p.cls || ''}">${p.what}</div></li>`).join('')}
+          </ol>
+        </div>`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

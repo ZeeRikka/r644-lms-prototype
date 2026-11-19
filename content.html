@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 内容管理</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE 第 2 轮：管理后台里的内容管理，四块用 ?tab=kb|models|qa|bank 切换。
+  这一页只出一个方向（不做三变体），先让四块「看得到」，结构再讨论。电脑优先（spec：管理后台按电脑优先）。
+  kb      知识库：四种内容一张表，草稿 / 已发布，核对日期超过 180 天的提醒，已停售待处理。
+  models  机型数据：不做人工编辑页。机型存在 JSON 库里，agent 抓官网后列出改动。改动要不要人确认，待讨论。
+  qa      问答：待答池 → 答复；已答复 → 整理成问答 → 发布；已发布的可以撤回。
+  bank    题库：导入方式参考同事的刷题工具（apple.xmevt.cn「题库管理」）：粘贴 JSON / 上传文件 / URL 获取 + 格式模板。
+          和它不同的地方：题型只有单选、多选、简答；解析必填；导入后先是草稿，发布了才能挑进任务；没有「激活题库」。
+-->
+<style>
+  .cm { padding: 18px 16px 32px; }
+  .crumb { font-size: 13px; color: var(--slate); margin-bottom: 6px; }
+  .crumb a { color: var(--slate); }
+  .cm h1 { font-size: 22px; margin: 0 0 12px; letter-spacing: -.01em; }
+  .tabs { display: flex; gap: 2px; border-bottom: 1.5px solid var(--ink); margin-bottom: 18px; overflow-x: auto; }
+  .tabs button { border: 0; background: transparent; padding: 9px 14px; font-weight: 600; color: var(--slate); border-radius: var(--r-m) var(--r-m) 0 0; white-space: nowrap; }
+  .tabs button.on { background: var(--ink); color: #fff; }
+  .tabs .badge { margin-left: 6px; height: 18px; min-width: 18px; font-size: 11px; }
+  .lead { font-size: 14px; color: var(--slate); margin: 0 0 16px; max-width: 46em; }
+  .open-q { font-size: 13px; background: var(--wait-soft); color: #5e3d00; border-radius: var(--r-m); padding: 8px 12px; margin: 0 0 16px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .toolbar .sp { flex: 1; }
+  .chipset { display: flex; gap: 4px; flex-wrap: wrap; }
+  .chipset button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 13px; }
+  .chipset button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+  table.t { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; font-size: 14px; }
+  .t th, .t td { padding: 10px 12px; text-align: left; border-top: 1px solid var(--line-soft); vertical-align: middle; }
+  .t thead th { border-top: 0; background: var(--paper); font-size: 12px; color: var(--slate); }
+  .t td.ttl { font-weight: 600; }
+  .t td.ttl small { display: block; font-weight: 400; color: var(--slate); font-size: 12px; }
+  .t .act { white-space: nowrap; text-align: right; }
+  .t .act .btn { padding: 4px 10px; font-size: 13px; }
+  .st { display: inline-block; line-height: 1.4; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .st.draft { background: var(--paper); color: var(--slate); border: 1px dashed var(--mist); }
+  .st.pub { background: var(--pass-soft); color: var(--pass); }
+  .old { color: var(--block); font-weight: 700; }
+  .alert { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--surface); border: 1.5px solid var(--block); border-radius: var(--r-l); padding: 12px 14px; margin-bottom: 10px; }
+  .alert b { color: var(--block); }
+  .alert.wait { border-color: var(--wait); }
+  .alert.wait b { color: var(--wait); }
+  .alert .sp { flex: 1; min-width: 12em; font-size: 14px; }
+  @container app (max-width: 699px) { .t .hide-s { display: none; } .t th, .t td { padding: 9px 8px; } }
+
+  /* 机型数据 */
+  .twocol { display: grid; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 14px 16px; }
+  .card h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card h2 small { font-weight: 400; color: var(--slate); font-size: 12px; }
+  .run { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; font-size: 14px; margin: 0; }
+  .run dt { color: var(--slate); }
+  .run dd { margin: 0; }
+  .chg { list-style: none; margin: 0; padding: 0; }
+  .chg li { padding: 10px 0; border-top: 1px solid var(--line-soft); display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+  .chg li:first-child { border-top: 0; }
+  .chg .w { font-weight: 600; }
+  .chg .ft { font-size: 14px; grid-column: 1; }
+  .chg .from { color: var(--slate); text-decoration: line-through; }
+  .chg .to { font-weight: 700; }
+  .chg .src { font-size: 12px; color: var(--mist); grid-column: 1; }
+  .chg .b { grid-row: 1 / span 3; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+  .chg .b .btn { padding: 4px 10px; font-size: 13px; }
+  .chg li.done { opacity: .55; }
+  pre.json { margin: 0; background: var(--ink); color: #dfe6ee; border-radius: var(--r-m); padding: 12px 14px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; }
+  pre.json .k { color: #9fb4ff; }
+  pre.json .tbd { color: #f4d58d; }
+  @container app (min-width: 900px) { .twocol { grid-template-columns: 1.1fr 1fr; align-items: start; } }
+
+  /* 问答 */
+  .pool li { list-style: none; }
+  .pool { margin: 0; padding: 0; }
+  .ask { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 12px 14px; margin-bottom: 8px; }
+  .ask .meta { font-size: 12px; color: var(--slate); display: flex; gap: 10px; flex-wrap: wrap; }
+  .ask .meta .wait-d { color: var(--block); font-weight: 700; }
+  .ask .body { font-weight: 600; margin: 4px 0 8px; }
+  .ask .reply { font-size: 14px; background: var(--paper); border-radius: var(--r-s); padding: 8px 10px; margin-bottom: 8px; }
+  .ask .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ask .row .btn { padding: 4px 10px; font-size: 13px; }
+  .ask textarea, .draft textarea, .draft input, .draft select { width: 100%; border: 1px solid var(--line); border-radius: var(--r-m); padding: 8px; font: inherit; margin: 6px 0; background: #fff; }
+  .draft { background: var(--surface); border: 2px solid var(--cobalt); border-radius: var(--r-l); padding: 14px 16px; margin-bottom: 14px; }
+  .draft h3 { margin: 0 0 4px; font-size: 16px; }
+  .draft label { font-size: 12px; color: var(--slate); font-weight: 600; display: block; margin-top: 6px; }
+  .draft .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+  .sec-h { font-size: 13px; color: var(--slate); font-weight: 700; margin: 4px 0 8px; }
+  @container app (min-width: 900px) { .qa-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; align-items: start; } }
+
+  /* 题库导入弹层 */
+  .modal-wrap { position: fixed; inset: 0; background: rgba(24,33,44,.4); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; }
+  .modal-wrap .backdrop { position: absolute; inset: 0; }
+  .modal { position: relative; background: var(--surface); border-radius: var(--r-l); width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto; }
+  .modal header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .modal header h3 { margin: 0; font-size: 16px; }
+  .modal .mtabs { display: flex; border-bottom: 1px solid var(--line); }
+  .modal .mtabs button { flex: 1; border: 0; background: transparent; padding: 10px; font-weight: 600; color: var(--slate); }
+  .modal .mtabs button.on { color: var(--cobalt); box-shadow: inset 0 -2px 0 var(--cobalt); }
+  .modal .mb { padding: 14px 18px; }
+  .modal textarea, .modal input[type=url] { width: 100%; border: 1px solid var(--line); border-radius: var(--r-m); padding: 8px; font: 12.5px/1.5 ui-monospace, Menlo, monospace; }
+  .modal textarea { min-height: 200px; }
+  .modal .drop { display: block; border: 2px dashed var(--line); border-radius: var(--r-m); padding: 28px; text-align: center; color: var(--slate); cursor: pointer; }
+  .modal .check { font-size: 13px; margin-top: 10px; }
+  .modal .check li { margin: 2px 0; }
+  .modal .check .ok { color: var(--pass); }
+  .modal .check .bad { color: var(--block); }
+  .modal footer { display: flex; gap: 8px; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); }
+  .qtype { font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: var(--r-s); border: 1px solid currentColor; white-space: nowrap; }
+  .qtype.single { color: var(--k-model); }
+  .qtype.multi { color: var(--k-accessory); }
+  .qtype.short { color: var(--k-qa); }
+  .batch { font-size: 12px; color: var(--mist); }
+
+  @container app (min-width: 700px) { .cm { max-width: 1120px; margin: 0 auto; padding-top: 30px; } }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+// ---------- 假数据（今天 2026-11-18；180 天前是 2026-05-22） ----------
+const TODAY = new Date('2026-11-18');
+const daysAgo = (d) => Math.round((TODAY - new Date(d)) / 864e5);
+const KB = [
+  ...DATA.models.map((m) => ({ id: m.id, kind: 'model', title: m.name, status: 'pub', checked: m.checked, by: 'agent', disc: m.discontinued })),
+  { id: 'air-g5', kind: 'model', title: 'iPad Air（第 5 代）', status: 'pub', checked: '2026-04-02', by: 'agent', disc: true },
+  ...DATA.accessories.map((a) => ({ id: a.id, kind: 'accessory', title: a.name, status: 'pub', checked: a.checked, by: 'Zee', disc: a.discontinued })),
+  { id: 'mkb-1', kind: 'accessory', title: '妙控键盘（第一代）', status: 'pub', checked: '2026-03-15', by: 'Zee', disc: true },
+  ...DATA.entries.map((e) => ({ id: e.id, kind: 'entry', title: e.title, status: 'pub', checked: e.checked, by: 'Mia' })),
+  { id: 'cellular', kind: 'entry', title: '蜂窝版和无线局域网版怎么讲', status: 'draft', checked: '', by: 'Ivy' },
+  ...DATA.qas.map((q) => ({ id: q.id, kind: 'qa', title: q.q, status: 'pub', checked: q.checked, by: q.publisher })),
+];
+// 必填核对日期的只有机型和配件（decisions 第 5 节），所以 180 天提醒只看这两种
+const isStale = (x) => (x.kind === 'model' || x.kind === 'accessory') && x.checked && daysAgo(x.checked) > 180;
+
+const AGENT = {
+  run: '今天 06:00', next: '明天 06:00', pages: 9, file: 'catalog/ipad.json', ver: 'v2026.11.18-1',
+  changes: [
+    { id: 'c1', model: 'iPad mini（A17 Pro）', item: '存储容量', from: '128GB / 256GB / 512GB', to: '128GB / 256GB / 512GB / 1TB', src: 'apple.com.cn/ipad-mini/specs' },
+    { id: 'c2', model: 'iPad（第 10 代）', item: '状态', from: '在售', to: '已停售', src: 'apple.com.cn/ipad 系列页已不再列出', disc: true },
+    { id: 'c3', model: 'iPad Air 11 英寸（M2）', item: '重量', from: '462 克', to: '460 克', src: 'apple.com.cn/ipad-air/specs' },
+  ],
+};
+
+const ASKS = [
+  { id: 'k1', who: 'Leo', at: '11 月 15 日', wait: 3, body: '教育优惠能不能叠加以旧换新？', rel: '', state: 'open' },
+  { id: 'k2', who: 'Nina', at: '11 月 16 日', wait: 2, body: 'mini 的 A17 Pro 能跑 Apple 智能吗？顾客问了两次', rel: 'iPad mini（A17 Pro）', state: 'open', fromSearch: 'mini apple智能' },
+  { id: 'k3', who: 'Tom', at: '11 月 17 日', wait: 1, body: '妙控键盘 M4 款能不能给 Air 用？', rel: 'iPad Air 11 英寸（M2）', state: 'open' },
+  { id: 'k4', who: 'Leo', at: '11 月 18 日', wait: 0, body: '第 10 代 iPad 能不能外接显示器', rel: 'iPad（第 10 代）', state: 'open' },
+  { id: 'k5', who: 'Nina', at: '11 月 12 日', body: 'Pro 的纳米纹理玻璃是所有容量都能选吗？', rel: 'iPad Pro 11 英寸（M4）', state: 'answered',
+    reply: '不是。只有 1TB 和 2TB 可选纳米纹理玻璃，256GB 和 512GB 不能选。', replyBy: 'Mia' },
+  { id: 'k6', who: 'Tom', at: '11 月 10 日', body: 'USB-C 的笔有没有压感', rel: '', state: 'answered', reply: '没有压感。要压感推荐 Apple Pencil Pro。', replyBy: 'Ivy', linked: 'qa-pencil-pro-vs-usbc' },
+];
+const TOPICS = ['配件兼容', '系列差异', '屏幕', '性能', '选购建议'];
+
+const QUESTIONS = [
+  { id: 'q1', type: 'single', stem: 'iPad Air 11 英寸（M2）的屏幕最高刷新率是多少？', topic: '屏幕', status: 'pub', batch: '手工新建' },
+  { id: 'q2', type: 'multi', stem: '下面哪些机型能用 Apple Pencil Pro？', topic: '配件兼容', status: 'pub', batch: '手工新建' },
+  { id: 'q3', type: 'short', stem: '插画师拿 2020 年 iPad Pro 来问要不要换 M4，你怎么讲？', topic: '系列差异', status: 'pub', batch: '手工新建' },
+  { id: 'q4', type: 'single', stem: 'iPad mini 能接妙控键盘吗？（判断题，按两个选项的单选题录入）', topic: '配件兼容', status: 'pub', batch: '11-10 导入 · 平板换新.json' },
+  { id: 'q5', type: 'single', stem: '哪款 iPad 用面容 ID 解锁？', topic: '系列差异', status: 'draft', batch: '11-10 导入 · 平板换新.json' },
+];
+const TYPE_NAME = { single: '单选题', multi: '多选题', short: '简答题' };
+
+const TEMPLATE = `{
+  "name": "这批题的名字（导入后只用来标来源）",
+  "questions": [
+    {
+      "type": "single",
+      "scene": "情境描述（选填）",
+      "stem": "题干",
+      "topics": ["屏幕"],
+      "models": ["iPad Air 11 英寸（M2）"],
+      "options": ["60Hz", "90Hz", "120Hz"],
+      "answer": ["60Hz"],
+      "explanation": "解析（必填）"
+    },
+    {
+      "type": "multi",
+      "stem": "下面哪些机型能用 Apple Pencil Pro？",
+      "topics": ["配件兼容"],
+      "options": ["iPad Pro（M4）", "iPad Air（M2）", "iPad（第 10 代）"],
+      "answer": ["iPad Pro（M4）", "iPad Air（M2）"],
+      "explanation": "Pencil Pro 只配 2024 年起的 Pro、Air 和 mini。"
+    },
+    {
+      "type": "short",
+      "scene": "顾客拿着 Apple Pencil（第二代）来问。",
+      "stem": "他的笔能不能用在 iPad Pro（M4）上？",
+      "topics": ["配件兼容"],
+      "points": ["讲清第二代不兼容 M4 款", "推荐 Apple Pencil Pro 并说出一项新功能"],
+      "need": 2,
+      "note": "参考说明（选填）"
+    }
+  ]
+}
+/* 和刷题工具的格式不同：
+   - 没有 judge（判断题）：写成两个选项的 single
+   - 没有 fill（填空题）
+   - 选择题的 explanation 必填；简答题用 points（合格要点）和 need（至少讲到几条）
+   - topics 只能填已有的知识点 */`;
+const SAMPLE_IMPORT = TEMPLATE.split('/*')[0].trim();
+
+const TABS = [['kb', '知识库'], ['models', '机型数据'], ['qa', '问答'], ['bank', '题库']];
+const tab = () => TABS.some(([k]) => k === P.param('tab')) ? P.param('tab') : 'kb';
+
+// ---------- 四块 ----------
+function kbTab(s) {
+  const f = s.kbKind, st = s.kbStatus;
+  const rows = KB.filter((x) => (f === 'all' || x.kind === f) && (st === 'all' || (st === 'stale' ? isStale(x) : s.status[x.id] === st)));
+  const stale = KB.filter(isStale);
+  const discPending = KB.filter((x) => x.disc && x.kind === 'model' && x.id === 'air-g5');
+  const chip = (key, val, label) => `<button class="${s[key] === val ? 'on' : ''}" data-act="set" data-k="${key}" data-v="${val}">${label}</button>`;
+  return `
+    <p class="lead">机型、配件、知识条目、问答都在这一张表里。只有已发布的出现在产品手册、快速查询和任务素材里；草稿可以删除，已发布过的只能撤回。</p>
+    ${stale.length ? `<div class="alert"><span class="sp"><b>${stale.length} 条</b>核对日期超过 180 天：${stale.map((x) => P.esc(x.title)).join('、')}</span><button class="btn" data-act="set" data-k="kbStatus" data-v="stale">只看这些</button><button class="btn primary" data-act="recheck">全部标为今天已核对</button></div>` : ''}
+    ${discPending.length ? `<div class="alert wait"><span class="sp"><b>已停售待处理</b>：iPad Air（第 5 代）标为已停售后，有 2 条关联内容和 3 道练习题等你决定保留、修改还是撤回。</span><button class="btn" data-act="stub" data-msg="逐条确认页不在本轮原型里">逐条确认</button></div>` : ''}
+    <div class="toolbar">
+      <div class="chipset">${chip('kbKind', 'all', '全部')}${chip('kbKind', 'model', '机型')}${chip('kbKind', 'accessory', '配件')}${chip('kbKind', 'entry', '知识条目')}${chip('kbKind', 'qa', '问答')}</div>
+      <div class="chipset">${chip('kbStatus', 'all', '全部状态')}${chip('kbStatus', 'pub', '已发布')}${chip('kbStatus', 'draft', '草稿')}${chip('kbStatus', 'stale', '超过 180 天')}</div>
+      <span class="sp"></span>
+      <button class="btn primary" data-act="stub" data-msg="新建知识条目、配件的编辑页不在本轮原型里">新建</button>
+    </div>
+    <table class="t">
+      <thead><tr><th>类型</th><th>标题</th><th>状态</th><th class="hide-s">核对日期</th><th class="hide-s">最后修改</th><th></th></tr></thead>
+      <tbody>${rows.map((x) => {
+        const pub = s.status[x.id] === 'pub';
+        return `<tr><td>${UI.kind(x.kind)}</td>
+          <td class="ttl">${P.esc(x.title)} ${UI.disc(x.disc)}${x.kind === 'model' ? '<small>来自 JSON 库，在「机型数据」里更新</small>' : ''}</td>
+          <td><span class="st ${pub ? 'pub' : 'draft'}">${pub ? '已发布' : '草稿'}</span></td>
+          <td class="hide-s ${isStale(x) && !s.rechecked ? 'old' : ''}">${s.rechecked && isStale(x) ? '2026-11-18' : x.checked || '—'}${isStale(x) && !s.rechecked ? `<br><small>${daysAgo(x.checked)} 天前</small>` : ''}</td>
+          <td class="hide-s">${x.by === 'agent' ? 'agent 抓取' : x.by}</td>
+          <td class="act">${x.kind === 'model' ? '' : pub ? `<button class="btn" data-act="pub" data-id="${x.id}">撤回</button>` : `<button class="btn primary" data-act="pub" data-id="${x.id}">发布</button> <button class="btn" data-act="stub" data-msg="草稿删除：原型里不真删">删除</button>`}</td></tr>`;
+      }).join('') || '<tr><td colspan="6" style="color:var(--slate)">没有符合条件的内容</td></tr>'}</tbody>
+    </table>`;
+}
+
+function jsonPreview() {
+  const m = UI.model('pro11-m4');
+  const k = (x) => `<span class="k">"${x}"</span>`;
+  const lines = [
+    `{`, `  ${k('id')}: "${m.id}",`, `  ${k('series')}: "${m.series}",`, `  ${k('name')}: "${m.name}",`,
+    `  ${k('discontinued')}: false,`, `  ${k('source')}: "${m.source}",`, `  ${k('checked')}: "${m.checked}",`,
+    `  ${k('params')}: {`,
+    ...Object.entries(m.p).slice(0, 4).map(([n, x]) => `    ${k(n)}: { "v": "${x.v}"${x.note ? `, "note": "${x.note}"` : ''} },`),
+    `    …`, `  },`,
+    `<span class="tbd">  "price": { "list": …, "edu": … }   // 待讨论：原价、教育优惠价，按配置怎么记</span>`,
+    `}`,
+  ];
+  return `<pre class="json">${lines.join('\n')}</pre>`;
+}
+function modelsTab(s) {
+  const left = AGENT.changes.filter((c) => !s.chg[c.id]);
+  return `
+    <p class="lead">机型不在后台手工编辑。机型数据放在一个 JSON 库里，agent 每天抓一次 apple.com.cn 的技术规格页，和库里的值比对，把不一样的地方列在这里。</p>
+    <p class="open-q">待讨论：agent 抓到的改动是直接生效，还是像下面这样要人点「采纳」？价格（原价、教育优惠价）放在 JSON 的哪里？配件和兼容关系是不是也走 JSON？</p>
+    <div class="twocol">
+      <div>
+        <div class="card" style="margin-bottom:14px"><h2>最近一次抓取 <small>${AGENT.file} · ${AGENT.ver}</small></h2>
+          <dl class="run"><dt>时间</dt><dd>${AGENT.run}（下次 ${AGENT.next}）</dd><dt>抓了</dt><dd>${AGENT.pages} 个官网页面</dd><dt>结果</dt><dd>${left.length ? `<b>${left.length} 处</b>和库里不一样，等你确认` : '和库里一致'}</dd></dl>
+          <p style="margin:10px 0 0"><button class="btn" data-act="stub" data-msg="（原型）已开始抓取，大约 2 分钟">现在抓一次</button></p>
+        </div>
+        <div class="card"><h2>发现的改动 <small>采纳后写进 JSON，核对日期记为今天</small></h2>
+          <ul class="chg">${AGENT.changes.map((c) => {
+            const done = s.chg[c.id];
+            return `<li class="${done ? 'done' : ''}"><span class="w">${P.esc(c.model)} · ${c.item}</span>
+              <span class="ft"><span class="from">${P.esc(c.from)}</span> → <span class="to">${P.esc(c.to)}</span></span>
+              <span class="src">来源：${P.esc(c.src)}${c.disc ? ' · 采纳后会列出关联内容，等你逐条决定' : ''}</span>
+              <span class="b">${done ? (done === 'ok' ? '已采纳' : '已忽略') : `<button class="btn primary" data-act="chg" data-id="${c.id}" data-v="ok">采纳</button><button class="btn" data-act="chg" data-id="${c.id}" data-v="no">忽略</button>`}</span></li>`;
+          }).join('')}</ul>
+        </div>
+      </div>
+      <div class="card"><h2>库里的一条机型 <small>只读，示意</small></h2>${jsonPreview()}</div>
+    </div>`;
+}
+
+function qaTab(s) {
+  const open = ASKS.filter((a) => s.ask[a.id] === 'open');
+  const answered = ASKS.filter((a) => s.ask[a.id] === 'answered');
+  const pubQa = DATA.qas.filter((q) => s.status[q.id] === 'pub');
+  const draft = s.drafting ? ASKS.find((a) => a.id === s.drafting) : null;
+  return `
+    <p class="lead">答复和发布分两步：答复只给提问人看；觉得别人也会问，再把它整理成一条问答发布给全员。发布出来的问答不显示是谁提的。</p>
+    ${draft ? `<form class="draft" data-submit="publish">
+      <h3>整理成问答</h3><p style="margin:0;font-size:13px;color:var(--slate)">从 ${draft.who} 的提问带过来，改写成通用的说法再发布。</p>
+      <label>问题</label><input name="q" value="${P.esc(draft.body)}">
+      <label>答案</label><textarea name="a" rows="3">${P.esc(draft.reply)}</textarea>
+      <label>知识点（只能从已有的里选）</label><select name="t">${TOPICS.map((t) => `<option>${t}</option>`).join('')}</select>
+      <div class="row"><button type="button" class="btn" data-act="draft" data-id="">先不发</button><button class="btn primary">发布</button></div>
+    </form>` : ''}
+    <div class="qa-cols">
+      <section>
+        <p class="sec-h">待答池 ${open.length} 条 · 按提交时间从早到晚</p>
+        <ul class="pool">${open.map((a) => `<li class="ask">
+          <div class="meta"><span>${a.who} · ${a.at}</span>${a.wait ? `<span class="wait-d">已等 ${a.wait} 天</span>` : '<span>今天</span>'}${a.rel ? `<span>关联：${P.esc(a.rel)}</span>` : ''}${a.fromSearch ? `<span>来自搜索「${P.esc(a.fromSearch)}」</span>` : ''}</div>
+          <div class="body">${P.esc(a.body)}</div>
+          ${s.replying === a.id ? `<form data-submit="reply"><input type="hidden" name="id" value="${a.id}"><textarea name="r" rows="3" placeholder="答复只有提问人看得到"></textarea><div class="row"><button type="button" class="btn" data-act="replying" data-id="">取消</button><button class="btn primary">提交答复</button></div></form>`
+            : `<div class="row"><button class="btn primary" data-act="replying" data-id="${a.id}">答复</button><button class="btn" data-act="close" data-id="${a.id}">关闭…</button></div>`}
+        </li>`).join('') || '<li class="ask" style="color:var(--slate)">待答池空了</li>'}</ul>
+      </section>
+      <section>
+        <p class="sec-h">已答复 · 可以整理成问答</p>
+        <ul class="pool">${answered.map((a) => `<li class="ask">
+          <div class="meta"><span>${a.who} · ${a.at}</span><span>答复人 ${a.replyBy}</span></div>
+          <div class="body">${P.esc(a.body)}</div><div class="reply">${P.esc(a.reply)}</div>
+          <div class="row">${a.linked || s.linked[a.id] ? '<span class="st pub">已整理成问答</span>' : `<button class="btn" data-act="draft" data-id="${a.id}">整理成问答</button>`}</div>
+        </li>`).join('')}</ul>
+        <p class="sec-h" style="margin-top:16px">已发布的问答 ${pubQa.length + s.newQa.length} 条</p>
+        <table class="t"><tbody>${[...s.newQa, ...pubQa].map((q) => `<tr><td class="ttl">${P.esc(q.q)}<small>${q.topic} · 发布人 ${q.publisher}</small></td>
+          <td class="act">${q.publisher === 'Zee' || q.publisher === 'Zee（你）' ? '<button class="btn" data-act="stub" data-msg="问答编辑页不在本轮原型里">修改</button> ' : ''}${q.isNew ? '' : `<button class="btn" data-act="pub" data-id="${q.id}">撤回</button>`}</td></tr>`).join('')}</tbody></table>
+      </section>
+    </div>`;
+}
+
+function bankTab(s) {
+  const counts = { single: 0, multi: 0, short: 0 };
+  const all = [...QUESTIONS, ...s.imported];
+  all.forEach((q) => counts[q.type]++);
+  const drafts = all.filter((q) => s.status[q.id] === 'draft').length;
+  return `
+    <p class="lead">全部练习题放在一个题库里。导入方式参考同事的刷题工具：粘贴 JSON、上传 .json 文件、从 URL 获取，也可以复制格式模板交给 AI 出题。导入的题先是草稿，发布后才能挑进任务。</p>
+    <div class="toolbar">
+      <button class="btn primary" data-act="imp" data-v="paste">导入练习题</button>
+      <button class="btn" data-act="imp" data-v="template">查看模板</button>
+      <span class="sp"></span>
+      <span style="font-size:13px;color:var(--slate)">共 ${all.length} 道：单选题 ${counts.single} · 多选题 ${counts.multi} · 简答题 ${counts.short} · 草稿 ${drafts}</span>
+    </div>
+    <table class="t">
+      <thead><tr><th>题型</th><th>题干</th><th class="hide-s">知识点</th><th>状态</th><th></th></tr></thead>
+      <tbody>${all.map((q) => {
+        const pub = s.status[q.id] === 'pub';
+        return `<tr><td><span class="qtype ${q.type}">${TYPE_NAME[q.type]}</span></td>
+          <td class="ttl">${P.esc(q.stem)}<small class="batch">${P.esc(q.batch)}</small></td>
+          <td class="hide-s">${q.topic}</td>
+          <td><span class="st ${pub ? 'pub' : 'draft'}">${pub ? '已发布' : '草稿'}</span></td>
+          <td class="act">${pub ? `<button class="btn" data-act="pub" data-id="${q.id}">撤回</button>` : `<button class="btn primary" data-act="pub" data-id="${q.id}">发布</button>`}</td></tr>`;
+      }).join('')}</tbody>
+    </table>
+    ${s.imp ? importModal(s) : ''}`;
+}
+function importModal(s) {
+  const m = s.imp;
+  const body = m === 'template'
+    ? `<p style="margin:0 0 8px;font-size:13px;color:var(--slate)">把模板复制给 ChatGPT、Claude 等 AI，让它按这个格式出题，再粘贴到「粘贴 JSON」里导入。</p><pre class="json" style="max-height:340px">${P.esc(TEMPLATE)}</pre>`
+    : m === 'file' ? `<label class="drop">点击选择 .json 文件<input type="file" accept=".json" hidden data-act="stub" data-msg="（原型）不读文件，请用「粘贴 JSON」"></label>`
+    : m === 'url' ? `<input type="url" placeholder="https://example.com/questions.json"><p style="font-size:13px;color:var(--slate)">（原型）不发请求。</p>`
+    : `<textarea name="json" aria-label="练习题 JSON">${P.esc(SAMPLE_IMPORT)}</textarea>
+       <ul class="check"><li class="ok">✓ 3 道题格式正确：单选题 1 · 多选题 1 · 简答题 1</li><li class="ok">✓ 知识点都是已有的</li><li class="bad">✗ 如果出现 judge、fill 题型会被拒绝，并告诉你怎么改</li></ul>`;
+  return `<div class="modal-wrap"><div class="backdrop" data-act="imp" data-v=""></div><div class="modal" role="dialog" aria-label="导入练习题">
+    <header><h3>${m === 'template' ? '格式模板' : '导入练习题'}</h3><button class="btn ghost" data-act="imp" data-v="" aria-label="关闭">✕</button></header>
+    ${m === 'template' ? '' : `<div class="mtabs">${[['paste', '粘贴 JSON'], ['file', '上传文件'], ['url', 'URL 获取']].map(([k, n]) => `<button class="${m === k ? 'on' : ''}" data-act="imp" data-v="${k}">${n}</button>`).join('')}</div>`}
+    <div class="mb">${body}</div>
+    <footer>${m === 'template' ? `<button class="btn" data-act="imp" data-v="">关闭</button><button class="btn primary" data-act="stub" data-msg="（原型）模板已复制">复制模板</button>`
+      : `<button class="btn" data-act="imp" data-v="">取消</button><button class="btn primary" data-act="doImport" ${m === 'paste' ? '' : 'disabled'}>导入为草稿</button>`}</footer>
+  </div></div>`;
+}
+
+P.mount({
+  page: '内容管理',
+  state: {
+    kbKind: 'all', kbStatus: 'all', rechecked: false,
+    status: Object.fromEntries([...KB, ...QUESTIONS].map((x) => [x.id, x.status])),
+    chg: {}, ask: Object.fromEntries(ASKS.map((a) => [a.id, a.state])), replying: '', drafting: '', linked: {}, newQa: [],
+    imp: '', imported: [],
+  },
+  actions: {
+    tab(el) { P.setParams({ tab: el.dataset.k }); return false; },
+    set(el, s) { s[el.dataset.k] = el.dataset.v; },
+    stub(el) { P.toast(el.dataset.msg); return false; },
+    recheck(el, s) { s.rechecked = true; P.toast('已把 2 条标为今天已核对'); },
+    pub(el, s) { const id = el.dataset.id; s.status[id] = s.status[id] === 'pub' ? 'draft' : 'pub'; P.toast(s.status[id] === 'pub' ? '已发布' : '已撤回，回到草稿'); },
+    chg(el, s) { s.chg[el.dataset.id] = el.dataset.v; P.toast(el.dataset.v === 'ok' ? '已采纳，写进 JSON 库' : '已忽略，下次抓到同样的值不再提示'); },
+    replying(el, s) { s.replying = el.dataset.id; },
+    close(el, s) { s.ask[el.dataset.id] = 'closed'; P.toast('（原型）已关闭，原因：与已有问答重复'); },
+    draft(el, s) { s.drafting = el.dataset.id; },
+    imp(el, s) { s.imp = el.dataset.v; },
+    doImport(el, s) {
+      const n = s.imported.length;
+      s.imported.push(
+        { id: 'i' + n + 'a', type: 'single', stem: 'iPad Air 11 英寸（M2）的屏幕最高刷新率是多少？（导入）', topic: '屏幕', batch: '今天导入 · 粘贴的 JSON' },
+        { id: 'i' + n + 'b', type: 'multi', stem: '下面哪些机型能用 Apple Pencil Pro？（导入）', topic: '配件兼容', batch: '今天导入 · 粘贴的 JSON' },
+        { id: 'i' + n + 'c', type: 'short', stem: '他的笔能不能用在 iPad Pro（M4）上？（导入）', topic: '配件兼容', batch: '今天导入 · 粘贴的 JSON' });
+      s.imported.slice(-3).forEach((q) => { s.status[q.id] = 'draft'; });
+      s.imp = ''; P.toast('已导入 3 道题，都是草稿');
+    },
+  },
+  submits: {
+    reply(f, s) { const a = ASKS.find((x) => x.id === f.id.value); a.reply = f.r.value || '（原型）答复内容'; a.replyBy = 'Zee'; s.ask[a.id] = 'answered'; s.replying = ''; P.toast('已答复，提问人会在首页看到'); },
+    publish(f, s) { s.newQa.unshift({ id: 'n' + s.newQa.length, q: f.q.value, topic: f.t.value, publisher: 'Zee（你）', isNew: true }); s.linked[s.drafting] = true; s.drafting = ''; P.toast('问答已发布，提问人能看到「已整理成问答」'); },
+  },
+  variants: {
+    A: {
+      name: '四块分页',
+      render(s) {
+        const t = tab();
+        const badge = { kb: KB.filter(isStale).length + 1, models: AGENT.changes.filter((c) => !s.chg[c.id]).length, qa: ASKS.filter((a) => s.ask[a.id] === 'open').length, bank: 0 };
+        return `<div class="cm">
+          <div class="crumb"><a href="${P.link('home.html', { role: 'facilitator' })}">首页</a> › 管理后台 › <a href="${P.link('admin.html')}">权限勾选表</a> · 内容管理</div>
+          <h1>内容管理</h1>
+          <nav class="tabs" role="tablist">${TABS.map(([k, n]) => `<button role="tab" aria-selected="${t === k}" class="${t === k ? 'on' : ''}" data-act="tab" data-k="${k}">${n}${badge[k] ? `<span class="badge">${badge[k]}</span>` : ''}</button>`).join('')}</nav>
+          ${{ kb: kbTab, models: modelsTab, qa: qaTab, bank: bankTab }[t](s)}
+        </div>`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

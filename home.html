@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 首页</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE：首页，已选定 B 入口格子（第 2 轮），A 清单、C 下一步已删，留在提交 d91b309 及之前。?device=phone|desktop 切排法，?role=staff|facilitator 切角色。
+  规则（decisions.md 第 12、14 节）：从上到下 = 待办摘要（默认收起）、五个入口；搜索框固定在屏幕底部，手机和电脑一样；协导员多「管理后台」。
+  B 入口格子：入口是大格子、角标压在角上，待办压缩成一条摘要，点开才展开。
+-->
+<style>
+  /* ---------- 共用 ---------- */
+  .who { font-size: 13px; color: var(--slate); }
+  .due-soon { color: var(--wait); font-weight: 600; }
+  .overdue { color: var(--block); font-weight: 600; }
+
+
+  /* ---------- B 入口格子 ---------- */
+  /* 第 2 轮：搜索框改成贴在底部的 dock（手机、电脑都是），和快速查询 C 拇指区同一个位置 */
+  .B { padding: 18px 16px 0; display: flex; flex-direction: column; min-height: 100%; }
+  .B .dock { position: sticky; bottom: 0; margin: auto -16px 0; padding: 10px 16px 14px; background: var(--paper); border-top: 1px solid var(--line); z-index: 2; }
+  .B .tiles { margin-bottom: 18px; }
+  @media (max-width: 520px) { .B { min-height: calc(100vh - 96px); } .B .dock { bottom: 60px; } }
+  body[data-device="desktop"] .B { min-height: calc(100vh - 130px); }
+  body[data-device="desktop"] .B .dock { bottom: 64px; } /* 让出原型切换条 */
+  .B .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .B .top .hello { font-size: 17px; font-weight: 700; flex: 1; }
+  .B .search input { padding: 14px 0; }
+  .B .digest { margin: 14px 0 16px; background: var(--ink); color: #fff; border-radius: var(--r-l); padding: 14px 16px; }
+  .B .digest button.sum { all: unset; cursor: pointer; display: flex; justify-content: space-between; align-items: center; width: 100%; font-weight: 600; }
+  .B .digest .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .B .digest .chip { font-size: 13px; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.12); }
+  .B .digest .chip.hot { background: var(--block); }
+  .B .digest ul { list-style: none; margin: 12px 0 0; padding: 0; }
+  .B .digest li { padding: 9px 0; border-top: 1px solid rgba(255,255,255,.14); display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+  .B .digest li a { color: #c9d4ff; white-space: nowrap; }
+  .B .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .B .tile { position: relative; display: flex; flex-direction: column; justify-content: space-between; min-height: 104px; padding: 14px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+  .B .tile:hover { text-decoration: none; border-color: var(--ink); }
+  .B .tile .name { font-size: 17px; font-weight: 700; }
+  .B .tile .sub { font-size: 12px; color: var(--slate); }
+  .B .tile .badge { position: absolute; top: -6px; right: -6px; height: 26px; min-width: 26px; font-size: 14px; border-radius: 13px; border: 2px solid var(--paper); }
+  .B .tile.wide { grid-column: span 2; min-height: 64px; flex-direction: row; align-items: center; }
+  .B .tile.admin { background: var(--cobalt-soft); border-color: #c4cff6; }
+  @container app (min-width: 700px) {
+    .B { padding: 32px 40px 0; }
+    .B .dock { margin: auto -40px 0; padding: 14px 40px 18px; }
+    .B .dock .searchbox { max-width: 720px; margin: 0 auto; }
+    .B .digest { margin-top: 0; }
+    .B .digest ul { columns: 2; column-gap: 28px; }
+    .B .digest li { break-inside: avoid; }
+    .B .tiles { grid-template-columns: repeat(3, 1fr); }
+    .B .tile { min-height: 132px; }
+    .B .tile.wide { grid-column: auto; min-height: 132px; flex-direction: column; align-items: stretch; }
+  }
+
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+// ---------------- 假数据：今天是 2026-11-18 ----------------
+const learnerTodos = [
+  { kind: 'task', hot: true, t: '平板换新：新旧 iPad Pro 讲清差异', m: '已逾期 1 天 · 3 个卡点', act: '继续', href: 'task.html', left: ['还有 2 条未读', '选择题未通过'], wait: ['1 道简答题待检验'] },
+  { kind: 'task', t: 'Apple Pencil 兼容关系', m: '11 月 20 日截止 · 即将到期', soon: true, act: '开始', href: 'task.html' },
+  { kind: 'task', t: 'iPad mini 适合哪些顾客', m: '11 月 28 日截止 · 未开始', act: '开始', href: 'task.html' },
+  { kind: 'note', t: '重做申请已批准', m: 'Mia 批准了「iPad Air 选购」的重做', act: '去作答', href: 'task.html' },
+  { kind: 'note', t: '你的提问已答复', m: '「教育优惠能不能叠加以旧换新？」', act: '查看', href: '#' },
+];
+const facilitatorTodos = [
+  { kind: 'duty', t: '待检验 2', m: 'Leo、Nina 各 1 道简答题', act: '去检验', href: '#' },
+  { kind: 'duty', t: '重做待批 1', m: 'Nina 申请重做「Apple Pencil 兼容关系」', act: '去审批', href: '#' },
+  { kind: 'duty', t: '待答池 4', m: '最早一条已等 3 天', act: '去答复', href: '#' },
+];
+
+function ctx() {
+  const fac = P.param('role', 'staff') === 'facilitator';
+  const todos = fac ? [learnerTodos[0], ...facilitatorTodos, ...learnerTodos.slice(1)] : learnerTodos;
+  const entries = [
+    { n: '学习任务', b: 3, href: 'task.html', sub: '3 个未完成，1 个已逾期' },
+    { n: '快速查询', b: 0, href: P.link('search.html'), sub: '机型、配件、知识条目、问答' },
+    { n: '产品手册', b: 0, href: P.link('model.html', { id: 'pro11-m4' }), sub: '按系列和机型翻看' },
+    { n: '我要提问', b: 1, href: '#', sub: '1 条有了答复' },
+    { n: '我的学习', b: 0, href: '#', sub: '薄弱知识点：配件兼容' },
+  ];
+  if (fac) entries.push({ n: '管理后台', b: 7, href: P.link('admin.html'), sub: '待检验 2 · 重做待批 1 · 待答池 4', admin: true });
+  return { fac, todos, entries, name: fac ? 'Ivy' : 'Leo' };
+}
+const fixHref = (h) => (h.startsWith('#') || h.includes('?')) ? h : P.link(h);
+const searchForm = (ph = '搜机型、配件、参数，或直接问') => `
+  <form class="searchbox search" data-submit="go" role="search">
+    <input name="q" placeholder="${ph}" aria-label="快速查询" enterkeyhint="search">
+    <button class="btn primary" style="padding:7px 12px">查询</button>
+  </form>`;
+
+P.mount({
+  page: '首页',
+  chosen: true,
+  state: {},
+  extraBar: [{ key: 'role', options: [['staff', '员工'], ['facilitator', '协导员']] }],
+  submits: {
+    go(form) { const q = form.q.value.trim(); location.href = P.link('search.html', { q }); return false; },
+  },
+  actions: {
+    digest(el, s) { s.open = !s.open; },
+  },
+  variants: {
+    B: {
+      name: '入口格子',
+      render(s, { device }) {
+        const c = ctx();
+        const hot = c.todos.filter((t) => t.hot).length;
+        const digest = `
+          <section class="digest">
+            <button class="sum" data-act="digest" aria-expanded="${!!s.open}">
+              <span>今天有 ${c.todos.length} 件事等着你</span><span>${s.open ? '收起' : '展开'}</span>
+            </button>
+            <div class="chips">
+              ${hot ? `<span class="chip hot">已逾期 ${hot}</span>` : ''}
+              <span class="chip">任务 3</span>
+              ${c.fac ? '<span class="chip">待检验 2</span><span class="chip">重做待批 1</span><span class="chip">待答池 4</span>' : ''}
+              <span class="chip">新结果 2</span>
+            </div>
+            ${s.open ? `<ul>${c.todos.map((t) => `<li><span>${P.esc(t.t)}</span><a href="${fixHref(t.href)}">${t.act}</a></li>`).join('')}</ul>` : ''}
+          </section>`;
+        const tiles = `<nav class="tiles">${c.entries.map((e, i) => `
+          <a class="tile ${e.admin ? 'admin' : ''} ${!c.fac && i === 4 ? 'wide' : ''}" href="${fixHref(e.href)}">
+            ${e.b ? `<span class="badge">${e.b}</span>` : ''}
+            <span class="name">${e.n}</span><span class="sub">${P.esc(e.sub)}</span></a>`).join('')}</nav>`;
+        return `<div class="B">
+          <div class="top"><span class="hello">${c.name}</span><span class="who">${c.fac ? '协导员' : '员工'}</span></div>
+          ${digest + tiles}
+          <div class="dock">${searchForm(device === 'phone' ? '搜一下' : undefined)}</div>
+        </div>`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

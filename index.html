@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 原型目录</title>
+<link rel="stylesheet" href="proto.css">
+<style>
+  /* PROTOTYPE：原型目录页，本身不是被评估的设计 */
+  body { padding: 0; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  .warn { display: inline-block; background: #fff200; border: 2px solid #000; padding: 4px 10px; font-weight: 700; font-size: 13px; border-radius: 4px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 18px 0 8px; letter-spacing: -.01em; }
+  .lead { color: var(--slate); margin: 0 0 32px; max-width: 34em; }
+  ol { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+  li { padding: 20px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 6px 20px; align-items: start; }
+  li h2 { font-size: 18px; margin: 0; }
+  li p { margin: 0; color: var(--slate); font-size: 14px; grid-column: 1; }
+  li .q { color: var(--ink); }
+  li .go { grid-row: 1 / span 3; grid-column: 2; display: flex; gap: 6px; flex-direction: column; }
+  .how { margin-top: 36px; font-size: 14px; color: var(--slate); }
+  .how kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #fff; font-size: 12px; }
+  @media (max-width: 560px) { li { grid-template-columns: 1fr; } li .go { grid-row: auto; grid-column: 1; flex-direction: row; } }
+</style>
+</head>
+<body>
+<main>
+  <span class="warn">PROTOTYPE · 一次性原型，假数据，不连后端</span>
+  <h1>R644 产品知识系统 · 界面原型</h1>
+  <p class="lead">第 2 轮已选定方向，前 5 页每页只保留选中的那个变体（落选的留在提交 d91b309 及之前）。底部黄色切换条可以切「手机 / 电脑」和换页，页面之间也能互相点过去。</p>
+  <ol>
+    <li>
+      <h2>首页 · B 入口格子</h2>
+      <p class="q">待办摘要默认收起，五个入口是大格子带角标，搜索框固定在底部。</p>
+      <p>切换条上可以换成「协导员」看多出来的待办和管理后台入口。</p>
+      <div class="go"><a class="btn" href="home.html?device=phone">手机</a><a class="btn" href="home.html?device=desktop">电脑</a></div>
+    </li>
+    <li>
+      <h2>快速查询结果 · C 拇指区</h2>
+      <p class="q">搜索框和类型筛选在屏幕底部，每条结果直接给出一句话答案。</p>
+      <p>搜索是真的（移植自 <code>src/domain/search.ts</code>），可以试「120Hz」「笔 第10代」「ipadpro」「键盘」。</p>
+      <div class="go"><a class="btn" href="search.html?device=phone&amp;q=120Hz">手机</a><a class="btn" href="search.html?device=desktop&amp;q=120Hz">电脑</a></div>
+    </li>
+    <li>
+      <h2>机型页与对比 · A 窄表</h2>
+      <p class="q">三列表格并排，机型名吸顶，可以只看不同。价格（原价、教育优惠价）放进规格，做法待讨论，原型里还没有。</p>
+      <p>默认打开新旧 Pro + Air 三台对比，可以加减机型。</p>
+      <div class="go"><a class="btn" href="model.html?device=phone&amp;view=compare&amp;cmp=pro11-g2,pro11-m4,air11-m2">手机</a><a class="btn" href="model.html?device=desktop&amp;id=pro11-m4">电脑</a></div>
+    </li>
+    <li>
+      <h2>任务详情 · C 时间线</h2>
+      <p class="q">上半是接下来要做的事，下半是已经做过的，卡点是线上的节点。</p>
+      <p>可以真的标记已读、申请重做，卡点会跟着变。</p>
+      <div class="go"><a class="btn" href="task.html?device=phone">手机</a><a class="btn" href="task.html?device=desktop">电脑</a></div>
+    </li>
+    <li>
+      <h2>权限勾选表 · A 三列表</h2>
+      <p class="q">能力 × 管理员 / 协导员 / 员工，只有协导员一列能拨。</p>
+      <p>开关可以拨，立即生效，没有保存按钮（规格 143 条）。</p>
+      <div class="go"><a class="btn" href="admin.html?device=desktop">电脑</a><a class="btn" href="admin.html?device=phone">手机</a></div>
+    </li>
+    <li>
+      <h2>内容管理（第 2 轮新增）</h2>
+      <p class="q">要回答：知识库、机型数据、问答、题库这四块管理在后台里长什么样？</p>
+      <p>只出一个方向，先看得到再讨论。机型走 JSON 库加 agent 抓取，题库导入参考同事的刷题工具。</p>
+      <div class="go"><a class="btn" href="content.html?device=desktop">电脑</a><a class="btn" href="content.html?device=phone">手机</a></div>
+    </li>
+  </ol>
+  <p class="how">数据：iPad 参数按 apple.com.cn 公开技术规格手抄，未逐项核对，只用于看排版。所有操作都只存在内存里，刷新即复原。</p>
+</main>
+</body>
+</html>

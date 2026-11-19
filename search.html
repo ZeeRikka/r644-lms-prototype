@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE · 快速查询</title>
+<link rel="stylesheet" href="proto.css">
+<!--
+  PROTOTYPE：快速查询结果页，已选定 C 拇指区（第 2 轮），A 列表、B 答案优先已删，留在提交 d91b309 及之前。?q=搜索词。
+  规则（decisions.md 第 9 节）：四种内容混排，每条带类型标签，按类型筛选；问答就地展开；
+  参数命中直接显示命中的那一项；底部「我要提问」带上搜索词；零结果保留输入；没输入时按知识点翻问答。
+  C 拇指区：搜索框和类型筛选都放在屏幕底部（单手够得着），结果每条直接给出「一句话答案」。
+-->
+<style>
+  .hl { background: #fff1a8; color: inherit; border-radius: 2px; padding: 0 1px; }
+  .ask-foot { text-align: center; padding: 22px 12px 8px; color: var(--slate); font-size: 14px; }
+  .ask-foot .btn { margin-top: 8px; }
+  .sheet-wrap { position: absolute; inset: 0; background: rgba(24,33,44,.35); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
+  body[data-device="desktop"] .sheet-wrap { position: fixed; align-items: center; }
+  .sheet-wrap .backdrop { position: absolute; inset: 0; }
+  .sheet { position: relative; background: var(--surface); width: 100%; max-width: 520px; border-radius: 16px 16px 0 0; padding: 18px 18px 22px; }
+  body[data-device="desktop"] .sheet { border-radius: 14px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 18px; }
+  .sheet p { margin: 0 0 12px; font-size: 13px; color: var(--slate); }
+  .sheet textarea { width: 100%; min-height: 96px; border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px; font: inherit; resize: vertical; }
+  .sheet select { width: 100%; margin: 10px 0 14px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-m); background: #fff; }
+  .sheet .row { display: flex; gap: 8px; justify-content: flex-end; }
+  #app { position: relative; }
+
+
+
+  /* ---------- C 拇指区 ---------- */
+  .C { display: flex; flex-direction: column; min-height: 100%; }
+  @media (max-width: 520px) { .C { min-height: calc(100vh - 96px); } }
+  .C .list { flex: 1; padding: 12px 0 8px; }
+  .C .q-echo { padding: 4px 16px 10px; font-size: 13px; color: var(--slate); }
+  .C .item { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border-bottom: 1px solid var(--line-soft); }
+  .C .item .stripe { background: var(--k); }
+  .C .item .in { padding: 12px 14px; }
+  .C .item button.in, .C .item a.in { all: unset; display: block; padding: 12px 14px; cursor: pointer; }
+  .C .item .in:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -2px; }
+  .C .item .line1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .C .item .t { font-weight: 600; font-size: 15px; }
+  .C .item .ty { font-size: 12px; color: var(--k); font-weight: 600; white-space: nowrap; }
+  .C .item .one { font-size: 17px; font-weight: 700; margin-top: 4px; line-height: 1.35; }
+  .C .item .one small { font-size: 13px; color: var(--slate); font-weight: 500; margin-right: 6px; }
+  .C .item .full { font-size: 14px; margin-top: 8px; color: var(--ink); }
+  .C .item .sub { font-size: 13px; color: var(--slate); margin-top: 2px; }
+  .C .dock { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 8px 12px 12px; }
+  .C .dock .types { display: flex; gap: 4px; margin-bottom: 8px; }
+  .C .dock .types button { flex: 1; border: 0; background: transparent; padding: 6px 0; font-size: 13px; border-radius: var(--r-s); color: var(--slate); }
+  .C .dock .types button.on { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+  .C .dock .types button:disabled { opacity: .4; }
+  @container app (min-width: 700px) {
+    .C { max-width: 720px; margin: 0 auto; flex-direction: column-reverse; }
+    .C .dock { position: static; border: 0; padding: 28px 16px 0; }
+    .C .dock .types { order: 2; margin: 10px 0 0; justify-content: flex-start; }
+    .C .dock .types button { flex: none; padding: 6px 14px; }
+    .C .dock { display: flex; flex-direction: column; }
+    .C .item { border-radius: var(--r-m); margin: 0 16px 6px; border: 1px solid var(--line); overflow: hidden; }
+  }
+
+  .browse h3 { font-size: 14px; margin: 18px 0 6px; color: var(--slate); }
+  .browse ul { list-style: none; margin: 0; padding: 0; }
+  .browse li { padding: 10px 12px; background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); margin-bottom: 6px; }
+  .browse button { all: unset; cursor: pointer; display: block; font-weight: 600; }
+  .browse .a { font-size: 14px; margin-top: 6px; }
+  .empty { background: var(--surface); border: 1px dashed var(--mist); border-radius: var(--r-l); padding: 22px 18px; text-align: center; margin: 12px 0; }
+  .empty h3 { margin: 0 0 6px; font-size: 17px; }
+  .empty p { margin: 0 0 12px; color: var(--slate); font-size: 14px; }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="proto.js"></script>
+<script>
+const KINDS = [['all', '全部'], ['model', '机型'], ['accessory', '配件'], ['entry', '知识条目'], ['qa', '问答']];
+const KCOLOR = { model: 'var(--k-model)', accessory: 'var(--k-accessory)', entry: 'var(--k-entry)', qa: 'var(--k-qa)' };
+
+function hits() {
+  const q = P.param('q');
+  const all = SEARCH.search(q);
+  const f = P.param('type', 'all');
+  const counts = Object.fromEntries(KINDS.map(([k]) => [k, k === 'all' ? all.length : all.filter((h) => h.kind === k).length]));
+  return { q, all, list: f === 'all' ? all : all.filter((h) => h.kind === f), f, counts };
+}
+// 高亮：只是视觉提示，按归一化前的原文粗略匹配
+function hl(text, tokens) {
+  let out = P.esc(text);
+  const forms = new Set();
+  const syn = DATA.synonyms.map((g) => g.map((w) => w.toLowerCase().replace(/\s+/g, '')));
+  for (const t of tokens) { forms.add(t); for (const g of syn) if (g.includes(t)) g.forEach((w) => forms.add(w)); }
+  for (const f of [...forms].sort((a, b) => b.length - a.length)) {
+    if (f.length < 1) continue;
+    const re = new RegExp(f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split('').join('\\s*'), 'gi');
+    out = out.replace(re, (m) => `<mark class="hl">${m}</mark>`);
+  }
+  return out.replace(/<mark class="hl">([^<]*)<mark class="hl">([^<]*)<\/mark>([^<]*)<\/mark>/g, '<mark class="hl">$1$2$3</mark>');
+}
+const qaOf = (id) => DATA.qas.find((x) => x.id === id);
+const hrefOf = (h) => h.kind === 'model' ? P.link('model.html', { id: h.id }) : '#';
+const actOf = (h) => h.kind === 'qa' ? 'toggle' : h.kind === 'model' ? '' : 'stub';
+const shortParam = (p) => p.value.replace(/（.*$/, '');
+
+function askSheet(s) {
+  if (!s.asking) return '';
+  return `<div class="sheet-wrap"><div class="backdrop" data-act="closeAsk"></div><form class="sheet" data-submit="ask">
+    <h3>我要提问</h3>
+    <p>协导员或管理员会答复你，答复只有你看得到。</p>
+    <textarea name="body" aria-label="提问正文">${P.esc(P.param('q') ? `搜「${P.param('q')}」没找到想要的：` : '')}</textarea>
+    <select name="rel" aria-label="关联机型（选填）"><option value="">关联系列或机型（选填）</option>${DATA.models.map((m) => `<option>${m.name}</option>`).join('')}</select>
+    <div class="row"><button type="button" class="btn" data-act="closeAsk">先不提</button><button class="btn primary">提交提问</button></div>
+  </form></div>`;
+}
+const askFoot = (q) => `<div class="ask-foot">没找到想要的？<br><button class="btn" data-act="ask">我要提问${q ? `（带上「${P.esc(q)}」）` : ''}</button></div>`;
+const emptyBox = (q) => `<div class="empty"><h3>没有找到「${P.esc(q)}」</h3><p>换个说法试试，比如用系列名或参数名。也可以直接提问，搜索词会一起带上。</p><button class="btn primary" data-act="ask">我要提问</button></div>`;
+function browse(s) {
+  const topics = [...new Set(DATA.qas.map((x) => x.topic))];
+  return `<div class="browse">${topics.map((t) => `<h3>${t}</h3><ul>${DATA.qas.filter((x) => x.topic === t).map((x) => `
+    <li><button data-act="toggle" data-id="${x.id}" aria-expanded="${!!s.open[x.id]}">${P.esc(x.q)}</button>${s.open[x.id] ? `<div class="a">${P.esc(x.a)}</div>` : ''}</li>`).join('')}</ul>`).join('')}</div>`;
+}
+const searchBox = (q, ph = '搜机型、配件、参数，或直接问') => `
+  <form class="searchbox" data-submit="search" role="search">
+    <input name="q" value="${P.esc(q)}" placeholder="${ph}" aria-label="快速查询" enterkeyhint="search" autocomplete="off">
+    ${q ? '<button type="button" class="btn ghost" data-act="clear" aria-label="清空">✕</button>' : ''}
+    <button class="btn primary" style="padding:7px 12px">查询</button>
+  </form>`;
+
+P.mount({
+  page: '快速查询',
+  chosen: true,
+  state: { open: {}, asking: false },
+  submits: {
+    search(form, s) { s.open = {}; P.setParams({ q: form.q.value.trim(), type: '' }); return false; },
+    ask(form, s) { s.asking = false; P.toast('提问已提交，答复后会在首页提醒你'); },
+  },
+  actions: {
+    toggle(el, s) { s.open[el.dataset.id] = !s.open[el.dataset.id]; },
+    type(el, s) { P.setParams({ type: el.dataset.k === 'all' ? '' : el.dataset.k }); return false; },
+    ask(el, s) { s.asking = true; },
+    closeAsk(el, s) { s.asking = false; },
+    clear(el, s) { P.setParams({ q: '', type: '' }); return false; },
+    stub(el) { P.toast(el.dataset.kind === 'entry' ? '知识条目详情页不在本轮原型里' : '配件页不在本轮原型里'); return false; },
+  },
+  variants: {
+    C: {
+      name: '拇指区',
+      render(s, { device }) {
+        const { q, all, list, f, counts } = hits();
+        const item = (h) => {
+          const open = s.open[h.id];
+          const qa = h.kind === 'qa' ? qaOf(h.id) : null;
+          // 一句话答案：问答取答案第一句，参数命中取命中项，其余取片段
+          const one = qa ? `${P.esc(qa.a.split('。')[0])}。`
+            : h.matchedParams.length ? h.matchedParams.slice(0, 2).map((p) => `<small>${P.esc(p.name)}</small>${P.esc(shortParam(p))}`).join('<br>') : '';
+          const inner = `
+            <div class="line1"><span class="t">${hl(h.title, h.tokens)} ${UI.disc(h.discontinued)}</span><span class="ty">${UI.kindLabel[h.kind]}</span></div>
+            ${one ? `<div class="one">${one}</div>` : `<div class="sub">${hl(SEARCH.snippet(h), h.tokens)}</div>`}
+            ${qa && open ? `<div class="full">${P.esc(qa.a)}</div><div class="sub">发布人 ${qa.publisher} · 核对日期 ${qa.checked}</div>` : qa ? '<div class="sub">点一下看全文</div>' : ''}`;
+          return `<div class="item" style="--k:${KCOLOR[h.kind]}"><span class="stripe"></span>${h.kind === 'model'
+            ? `<a class="in" href="${hrefOf(h)}">${inner}</a>`
+            : `<button class="in" data-act="${actOf(h)}" data-id="${h.id}" data-kind="${h.kind}">${inner}</button>`}</div>`;
+        };
+        const dock = `<div class="dock">
+          ${q && all.length ? `<div class="types" role="tablist">${KINDS.map(([k, n]) => `<button role="tab" aria-selected="${f === k}" class="${f === k ? 'on' : ''}" data-act="type" data-k="${k}" ${counts[k] || k === 'all' ? '' : 'disabled'}>${n}${k === 'all' ? '' : ' ' + counts[k]}</button>`).join('')}</div>` : ''}
+          ${searchBox(q, '搜一下')}</div>`;
+        return `<div class="C">
+          <div class="list">
+            ${q ? (all.length ? `<div class="q-echo">「${P.esc(q)}」共 ${all.length} 条${f !== 'all' ? `，只看${UI.kindLabel[f]}` : ''}</div>${list.map(item).join('')}${askFoot(q)}` : `<div style="padding:0 16px">${emptyBox(q)}</div>`)
+              : `<div style="padding:0 16px">${browse(s)}</div>`}
+          </div>
+          ${dock}
+        </div>${askSheet(s)}`;
+      },
+    },
+  },
+});
+</script>
+</body>
+</html>

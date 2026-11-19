@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PROTOTYPE · 机型与对比</title>
-<link rel="stylesheet" href="proto.css">
+<link rel="stylesheet" href="proto.css?v=2502a53">
 <!--
   PROTOTYPE：机型页 + 对比，已选定 A 窄表（第 2 轮），B 逐项卡、C 换新话术已删，留在提交 d91b309 及之前。
   ?id=机型 看机型页，?view=compare&cmp=a,b,c 看对比。
@@ -83,7 +83,7 @@
 </head>
 <body>
 <script src="data.js"></script>
-<script src="proto.js"></script>
+<script src="proto.js?v=2502a53"></script>
 <script>
 const cmpIds = () => P.param('cmp').split(',').filter((id) => UI.model(id)).slice(0, 3);
 const curId = () => UI.model(P.param('id')) ? P.param('id') : 'pro11-m4';

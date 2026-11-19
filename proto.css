@@ -161,6 +161,20 @@ body[data-device="phone"] #app {
 }
 #proto-state.show { display: block; }
 
+@media (max-width: 520px) {
+  body[data-device] {
+    --proto-bar-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    --proto-bar-clearance: calc(var(--proto-bar-height, 0px) + var(--proto-bar-bottom) + 8px);
+    padding-bottom: var(--proto-bar-clearance);
+  }
+  #proto-bar {
+    left: 8px; right: 8px; bottom: var(--proto-bar-bottom); transform: none;
+    max-width: none; border-radius: 12px;
+  }
+  #proto-bar .pb-sep { display: none; }
+  #toast, #proto-state { bottom: var(--proto-bar-clearance); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }

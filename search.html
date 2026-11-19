@@ -31,7 +31,7 @@
 
   /* ---------- C 拇指区 ---------- */
   .C { display: flex; flex-direction: column; min-height: 100%; }
-  @media (max-width: 520px) { .C { min-height: calc(100vh - 96px); } }
+  @media (max-width: 520px) { .C { min-height: calc(100dvh - var(--proto-bar-clearance)); } }
   .C .list { flex: 1; padding: 12px 0 8px; }
   .C .q-echo { padding: 4px 16px 10px; font-size: 13px; color: var(--slate); }
   .C .item { display: grid; grid-template-columns: 6px 1fr; background: var(--surface); border-bottom: 1px solid var(--line-soft); }
@@ -46,7 +46,7 @@
   .C .item .one small { font-size: 13px; color: var(--slate); font-weight: 500; margin-right: 6px; }
   .C .item .full { font-size: 14px; margin-top: 8px; color: var(--ink); }
   .C .item .sub { font-size: 13px; color: var(--slate); margin-top: 2px; }
-  .C .dock { position: sticky; bottom: 0; background: var(--paper); border-top: 1px solid var(--line); padding: 8px 12px 12px; }
+  .C .dock { position: sticky; bottom: var(--proto-bar-clearance, 0px); background: var(--paper); border-top: 1px solid var(--line); padding: 8px 12px 12px; }
   .C .dock .types { display: flex; gap: 4px; margin-bottom: 8px; }
   .C .dock .types button { flex: 1; border: 0; background: transparent; padding: 6px 0; font-size: 13px; border-radius: var(--r-s); color: var(--slate); }
   .C .dock .types button.on { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }

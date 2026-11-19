@@ -107,7 +107,13 @@ window.P = (() => {
       <nav id="proto-bar" aria-label="原型切换条（不属于设计）"></nav>`);
     rerender = () => { cfg.keepScroll = false; renderAll(); };
 
-    document.getElementById('proto-bar').addEventListener('click', (e) => {
+    const protoBar = document.getElementById('proto-bar');
+    // 窄屏换行后，用切换条的实际高度给底部控件让位。
+    new ResizeObserver(() => {
+      document.body.style.setProperty('--proto-bar-height', protoBar.offsetHeight + 'px');
+    }).observe(protoBar, { box: 'border-box' });
+
+    protoBar.addEventListener('click', (e) => {
       const b = e.target.closest('[data-pb],[data-pb-extra]');
       if (!b) return;
       const k = b.dataset.pb;
@@ -117,7 +123,7 @@ window.P = (() => {
       else if (k === 'state') document.getElementById('proto-state').classList.toggle('show');
       else if (b.dataset.pbExtra) setParams({ [b.dataset.pbExtra]: b.dataset.val });
     });
-    document.getElementById('proto-bar').addEventListener('change', (e) => {
+    protoBar.addEventListener('change', (e) => {
       if (e.target.dataset.pb === 'page') location.href = link(e.target.value);
     });
 
